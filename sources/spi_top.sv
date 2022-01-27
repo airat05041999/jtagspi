@@ -16,7 +16,7 @@ module spi_top
 
     (
     //SYSTEM
-    input logic clknotpll,
+    input logic clk,
     //INPUT_CONTROL
     //input logic interrupt, 
     //INPUT_SPI
@@ -46,7 +46,6 @@ logic rd1;
 logic full1;
 logic empty1;
 logic usedw1;
-logic clk;
 logic rst;
 
 //fifo 2 signals
@@ -139,10 +138,6 @@ spi_fsm #(.DATA(DATA))
         .len(len), .work(work), .op(op), .busy(busy)
     );
 
-pll pll_inst (
-        .refclk(clknotpll), .rst(0),
-        .outclk_0(clk)
-    ); 
 
 //////////////////////////////////////////////////
 endmodule
