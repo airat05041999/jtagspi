@@ -49,11 +49,15 @@ typedef enum logic [2:0] {ST_IDLE, ST_RUNNING_R, ST_RUNNING_WR, ST_DISPATCH, ST_
 //Local params
 //////////////////////////////////////////////////
 
+localparam FREQUENCY_DIVIDER = 4;
+localparam DELAY_SCSN = FREQUENCY_DIVIDER * 4;
+
 //////////////////////////////////////////////////
 //local signal
 //////////////////////////////////////////////////
 
 logic [15:0] count; 
+logic [15:0] counttransaction; 
 logic [(DATA - 1):0] shiftregister;
 logic [(DATA - 1):0] nextshiftregister;
 state_type state;
@@ -64,13 +68,13 @@ logic countenable;
 ////////////////////////////////////////////////// 
 
 //////////////////////////////////////////////////
-//counter
+//counter scsn
 //////////////////////////////////////////////////
 always_ff @(posedge clk) begin
     if (rst) begin
             count <= 0;
         end
-    else if (len == count) begin
+    else if ((FREQUENCY_DIVIDER * len + 2 * DELAY_SCSN) == count) begin
             count <= 0;
         end
     else if (countenable == 1) begin
@@ -80,6 +84,23 @@ always_ff @(posedge clk) begin
         count <= 0;
     end
 end
+
+//////////////////////////////////////////////////
+//counter of transaction
+//////////////////////////////////////////////////
+always_ff @(posedge clk) begin
+    if (rst) begin
+            counttransaction <= 0;
+        end
+    else if (len == count) begin
+            counttransaction <= 0;
+        end
+    else if ((countenable == 1) && (((DELAY_SCSN + FREQUENCY_DIVIDER * counttransaction) - count) == 1))  begin
+            counttransaction <= counttransaction + 1;
+        end
+end
+
+
 
 //////////////////////////////////////////////////
 //Shift register
@@ -98,7 +119,6 @@ end
 //////////////////////////////////////////////////
 
 assign mosi = nextshiftregister[7];
-assign sclk = (clk & (~scsn));
 
 //state machine
 always_ff @(posedge clk) begin
@@ -128,40 +148,18 @@ always_ff @(posedge clk) begin
             end
             //////////////////////////////////////////////////
             ST_RUNNING_WR : begin  
-                if ((len - 1) == count) begin 
+                if ((FREQUENCY_DIVIDER * len + 2 * DELAY_SCSN) == count) begin 
                     state <= ST_IDLE;
                     busy <= 0;
                     countenable <= 0;
                 end
-                else if (count == (len - 2))  begin
-                    shiftregister <= {nextshiftregister [(DATA-2):0],1'b0};
-                end
-                else if ((!count[0]) && count[1] && count[2])  begin
-                    shiftregister <= {nextshiftregister [(DATA-2):0],1'b0};
-                    rd <= 0;
-                end
-                else if (count[0] && count[1] && count[2])  begin
-                    shiftregister <= {rdata [(DATA-1):0]};
-                    rd <= 1;
-                end
-                else begin
-                    shiftregister <= {nextshiftregister [(DATA-2):0],1'b0};
-                    rd <= 0;
-                end
-            end
-            //////////////////////////////////////////////////
-            ST_RUNNING_R : begin  
-                if (len  == count) begin 
-                    state <= ST_IDLE;
-                    busy <= 0;
-                    countenable <= 0;
-                end
-                if (count < 24) begin
-                    if (count == 23) begin
+                else if ((count > (DELAY_SCSN - 1)) && (count < (FREQUENCY_DIVIDER * len + DELAY_SCSN)) && (!count[0]) && (!count[1]) && (!count[2]))
+                begin 
+                    if (counttransaction == (len - 1)) begin
                         shiftregister <= {nextshiftregister [(DATA-2):0],1'b0};
                         rd <= 0;
                     end
-                    else if (count[0] && count[1] && count[2]) begin
+                    else if (counttransaction[0] && counttransaction[1] && counttransaction[2])  begin
                         shiftregister <= {rdata [(DATA-1):0]};
                         rd <= 1;
                     end
@@ -170,14 +168,39 @@ always_ff @(posedge clk) begin
                         rd <= 0;
                     end
                 end
-                else if (count[0] && count[1] && count[2]) begin
-                        wdata <= {nextshiftregister [(DATA - 2):0], miso};  
-                        shiftregister <= {nextshiftregister [(DATA - 2):0], miso};  
-                        wr <= 1;
+            end
+            //////////////////////////////////////////////////
+            ST_RUNNING_R : begin  
+                if ((FREQUENCY_DIVIDER * len + 2 * DELAY_SCSN) == count) begin 
+                    state <= ST_IDLE;
+                    busy <= 0;
+                    countenable <= 0;
                 end
-                else begin
-                        shiftregister <= {nextshiftregister [(DATA - 2):0], miso};
-                        wr <= 0;
+                else if ((count > (DELAY_SCSN - 1)) && (count < (FREQUENCY_DIVIDER * len + DELAY_SCSN)) && (!count[0]) && (!count[1]) && (!count[2]))
+                begin 
+                    if (counttransaction < 24) begin
+                        if (counttransaction == 23) begin
+                            shiftregister <= {nextshiftregister [(DATA-2):0],1'b0};
+                            rd <= 0;
+                        end
+                        else if (counttransaction[0] && counttransaction[1] && counttransaction[2]) begin
+                            shiftregister <= {rdata [(DATA-1):0]};
+                            rd <= 1;
+                        end
+                        else begin
+                            shiftregister <= {nextshiftregister [(DATA-2):0],1'b0};
+                            rd <= 0;
+                        end
+                    end
+                    else if (counttransaction[0] && counttransaction[1] && counttransaction[2]) begin
+                            wdata <= {nextshiftregister [(DATA - 2):0], miso};  
+                            shiftregister <= {nextshiftregister [(DATA - 2):0], miso};  
+                            wr <= 1;
+                    end
+                    else begin
+                            shiftregister <= {nextshiftregister [(DATA - 2):0], miso};
+                            wr <= 0;
+                    end
                 end
             end
             //////////////////////////////////////////////////
@@ -202,23 +225,43 @@ always_ff @(posedge clk) begin
     end
 end
 
+//////////////////////////////////////////////////
+//scsn line
+//////////////////////////////////////////////////
+
 always_ff @(negedge clk) begin
     if(rst) begin
         scsn <= 1;
-    end else begin
-        if (len == count) begin
-                scsn <= 1;
-        end
+    end
         else if (state == ST_RUNNING_R) begin
                 scsn <= 0;
         end 
         else if (state == ST_RUNNING_WR) begin 
                 scsn <= 0;
         end
-    end
+        else begin 
+            scsn <= 0;
+        end
 end
 
+//////////////////////////////////////////////////
+//sclk impulse generation logic
+//////////////////////////////////////////////////
 
+always_ff @(negedge clk) begin
+    if(rst) begin
+        sclk <= 0;
+    end 
+	 else if (count == DELAY_SCSN) begin
+                sclk <= 1;
+        end
+        else if ((count > (DELAY_SCSN)) && (count < (FREQUENCY_DIVIDER * len + DELAY_SCSN + 1) && (!(count[1])))) begin
+                sclk <= 1;
+        end 
+        else begin 
+            sclk <= 0;
+        end
+end
 
 //////////////////////////////////////////////////
 endmodule
