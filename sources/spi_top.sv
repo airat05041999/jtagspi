@@ -16,6 +16,7 @@ module spi_top
 
     (
     //SYSTEM
+    input logic rst,
     input logic clk,
     //INPUT_CONTROL
     //input logic interrupt, 
@@ -46,7 +47,7 @@ logic rd1;
 logic full1;
 logic empty1;
 logic usedw1;
-logic rst;
+//logic rst;
 
 //fifo 2 signals
 logic [(DATA-1):0] wdata2;
@@ -66,7 +67,7 @@ logic busy;
 //////////////////////////////////////////////////
 //reset counter
 //////////////////////////////////////////////////
-always_ff @(posedge clk) begin
+/*always_ff @(posedge clk) begin
     if (countrst < 50000000) begin
         countrst <= countrst + 1;
     end
@@ -96,7 +97,7 @@ always_ff @(posedge clk) begin
         countwrst <= 25050001;
         wrst <= 1;
     end
-end
+end*/
 
 //////////////////////////////////////////////////
 //buffer fifo
