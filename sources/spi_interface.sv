@@ -183,17 +183,17 @@ always_ff @(posedge clk) begin
                     busy <= 0;
                     countenable <= 0;
                 end
-                else if (count == (DELAY_SCSN - 1)) begin
+                else if (count == (DELAY_SCSN - FREQUENCY_DIVIDER)) begin
                     shiftregister [(DATA - 1):0] <= rdata [(DATA-1):0];
                     rd <= 1;
                 end
                 else if ((count > (DELAY_SCSN - 1)) && (count < (FREQUENCY_DIVIDER * len + DELAY_SCSN)) && (count == ((counttransaction - 1) * FREQUENCY_DIVIDER + DELAY_SCSN))) begin 
-                    if (counttransaction < 24) begin
-                            if (counttransaction == 23) begin
+                    if (counttransaction < 25) begin
+                            if (counttransaction == 24) begin
                                 shiftregister <= {nextshiftregister [(DATA-2):0],1'b0};
                                 rd <= 0;
                             end
-                            else if (counttransaction[0] && counttransaction[1] && counttransaction[2]) begin
+                            else if ((!counttransaction[0]) && (!counttransaction[1]) && (!counttransaction[2])) begin
                                 shiftregister <= {rdata [(DATA-1):0]};
                                 rd <= 1;
                             end
@@ -202,7 +202,7 @@ always_ff @(posedge clk) begin
                                 rd <= 0;
                             end
                         end
-                        else if (counttransaction[0] && counttransaction[1] && counttransaction[2]) begin
+                        else if ((!counttransaction[0]) && (!counttransaction[1]) && (!counttransaction[2])) begin
                                 wdata <= {nextshiftregister [(DATA - 2):0], miso};  
                                 shiftregister <= {nextshiftregister [(DATA - 2):0], miso};  
                                 wr <= 1;
@@ -252,7 +252,7 @@ always_ff @(negedge clk) begin
                 scsn <= 0;
         end
         else begin 
-            scsn <= 0;
+            scsn <= 1;
         end
 end
 

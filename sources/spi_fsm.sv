@@ -104,7 +104,7 @@ always_ff @(posedge clk) begin
                 end
                 if (index == 3) begin
                     wr <= 1;
-                    wdata <= 8'hf0;;
+                    wdata <= 8'h00;;
                     index <= index - 1;
                 end 
             end

@@ -16,8 +16,8 @@ module spi_top
 
     (
     //SYSTEM
-    input logic rst,
-    input logic clk,
+    //input logic rst,
+    input logic clknotpll,
     //INPUT_CONTROL
     //input logic interrupt, 
     //INPUT_SPI
@@ -38,6 +38,8 @@ module spi_top
 //////////////////////////////////////////////////
 logic [31:0] countrst;
 logic [31:0] countwrst;
+logic rst;
+logic clk;
 
 //fifo 1 signals
 logic [(DATA-1):0] wdata1;
@@ -47,7 +49,7 @@ logic rd1;
 logic full1;
 logic empty1;
 logic usedw1;
-//logic rst;
+
 
 //fifo 2 signals
 logic [(DATA-1):0] wdata2;
@@ -67,16 +69,20 @@ logic busy;
 //////////////////////////////////////////////////
 //reset counter
 //////////////////////////////////////////////////
-/*always_ff @(posedge clk) begin
-    if (countrst < 50000000) begin
+always_ff @(posedge clk) begin
+    if (countrst == 0) begin
+        rst <= 0;
         countrst <= countrst + 1;
     end
-    else if (countrst == 50000000) begin
-        countrst <= 50000001;
+    else if (countrst < 500000000) begin
+        countrst <= countrst + 1;
+    end
+    else if (countrst < 500000001) begin
+        countrst <= countrst + 1;
         rst <= 1;
     end
-    else if (countrst == 50000001) begin
-        countrst <= 50000002;
+    else if (countrst == 500000001) begin
+        countrst <= 500000002;
         rst <= 0;
     end
 end
@@ -86,18 +92,18 @@ always_ff @(posedge clk) begin
         wrst <= 1;
         countwrst <= countwrst + 1;
     end
-    else if (countwrst < 25000000) begin
+    else if (countwrst < 250000000) begin
         countwrst <= countwrst + 1;
     end
-    else if (countwrst < 25050000) begin
+    else if (countwrst < 250500001) begin
         countwrst <= countwrst + 1;
         wrst <= 0;
     end
-    else if (countwrst == 25050000) begin
-        countwrst <= 25050001;
+    else if (countwrst == 250500001) begin
+        countwrst <= 250500002;
         wrst <= 1;
     end
-end*/
+end
 
 //////////////////////////////////////////////////
 //buffer fifo
@@ -139,6 +145,10 @@ spi_fsm #(.DATA(DATA))
         .len(len), .work(work), .op(op), .busy(busy)
     );
 
+pll pll_inst (
+        .refclk(clknotpll), .rst(0),
+        .outclk_0(clk)
+    ); 
 
 //////////////////////////////////////////////////
 endmodule
