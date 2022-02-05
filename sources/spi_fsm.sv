@@ -44,12 +44,35 @@ typedef enum logic [2:0] {ST_IDLE, ST_RUNNING_R, ST_RUNNING_WR} state_type;
 //////////////////////////////////////////////////
 
 state_type state;
-logic interrupt;
-logic [1:0] index;
+logic [2:0] interrupt;
+logic [2:0] index;
+logic permission;
+logic flag;
 
 //////////////////////////////////////////////////
 //Architecture
 ////////////////////////////////////////////////// 
+
+//permission block
+always_ff @(posedge clk) begin
+    if(rst) begin
+        permission <= 0;
+        flag <= 0;
+    end 
+    else if ((busy == 1) && (flag == 1)) begin
+        permission <= 0;
+        flag <= 0;
+    end 
+    else if ((busy == 0) && (flag == 0)) begin
+        permission <= 1;
+        flag <= 1;
+    end
+    else if (state != ST_IDLE) begin
+        flag <= 1;
+        permission <= 0;
+    end
+end
+
 
 //state machine
 always_ff @(posedge clk) begin
@@ -61,7 +84,7 @@ always_ff @(posedge clk) begin
         op <=0;
         work <=0;
         len <= 0;
-        interrupt <= 1;
+        interrupt <= 3;
     end 
     else begin
         case (state)
@@ -72,16 +95,57 @@ always_ff @(posedge clk) begin
                 wr <= 0;
                 rd <= 0;
                 if (busy == 0) begin
-                    if (interrupt == 1) begin
+                    if ((interrupt == 1) && (permission == 1)) begin
                         state <= ST_RUNNING_R;
                         index <= 3;
                         interrupt <= 0;
+                    end
+                    else if ((interrupt == 2) && (permission == 1)) begin
+                        state <= ST_RUNNING_WR;
+                        index <= 5;
+                        interrupt <= 1;
+                    end
+                    else if ((interrupt == 3) && (permission == 1)) begin
+                        state <= ST_RUNNING_R;
+                        index <= 3;
+                        interrupt <= 2;
                     end
                 end 
             end
             //////////////////////////////////////////////////
             ST_RUNNING_WR : begin  
-                
+                if (index == 0) begin
+                    wr <= 0;
+                    work <= 1;
+                    op <= 1;
+                    state <= ST_IDLE;
+                    len <= 40;
+                end 
+                else if (index == 1) begin
+                    wr <= 1;
+                    wdata <= 8'hff;
+                    index <= index - 1;
+                end 
+                else if (index == 2) begin
+                    wr <= 1;
+                    wdata <= 8'hff;
+                    index <= index - 1;
+                end
+                else if (index == 3) begin
+                    wr <= 1;
+                    wdata <= 8'h04;;
+                    index <= index - 1;
+                end    
+                else if (index == 4) begin
+                    wr <= 1;
+                    wdata <= 8'h19;
+                    index <= index - 1;
+                end 
+                else if (index == 5) begin
+                    wr <= 1;
+                    wdata <= 8'h00;
+                    index <= index - 1;
+                end
             end
             //////////////////////////////////////////////////
             ST_RUNNING_R : begin  
@@ -92,19 +156,19 @@ always_ff @(posedge clk) begin
                     state <= ST_IDLE;
                     len <= 40;
                 end 
-                if (index == 1) begin
+                else if (index == 1) begin
                     wr <= 1;
                     wdata <= 8'h00;
                     index <= index - 1;
                 end 
-                if (index == 2) begin
+                else if (index == 2) begin
                     wr <= 1;
                     wdata <= 8'h19;
                     index <= index - 1;
                 end
-                if (index == 3) begin
+                else if (index == 3) begin
                     wr <= 1;
-                    wdata <= 8'h00;;
+                    wdata <= 8'h00;
                     index <= index - 1;
                 end 
             end

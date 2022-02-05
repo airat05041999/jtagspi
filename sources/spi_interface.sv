@@ -135,6 +135,7 @@ always_ff @(posedge clk) begin
         case (state)
             //////////////////////////////////////////////////
             ST_IDLE : begin
+                shiftregister <= 0;
                 wr <= 0;
                 rd <= 0;
                 if ((work == 1) && (op == 1)) begin
@@ -155,12 +156,12 @@ always_ff @(posedge clk) begin
                     busy <= 0;
                     countenable <= 0;
                 end
-                else if ((count > (DELAY_SCSN - 1)) && (count < (FREQUENCY_DIVIDER * len + DELAY_SCSN)) && (!count[0]) && (!count[1]) && (!count[2])) begin 
-                        if (counttransaction == (len - 1)) begin
+                else if ((count > (DELAY_SCSN - 1)) && (count < (FREQUENCY_DIVIDER * len + DELAY_SCSN)) && (count == ((counttransaction - 1) * FREQUENCY_DIVIDER + DELAY_SCSN))) begin 
+                        if (counttransaction == len) begin
                             shiftregister <= {nextshiftregister [(DATA-2):0],1'b0};
                             rd <= 0;
                         end
-                        else if (counttransaction[0] && counttransaction[1] && counttransaction[2])  begin
+                        else if ((!counttransaction[0]) && (!counttransaction[1]) && (!counttransaction[2]))  begin
                             shiftregister <= {rdata [(DATA-1):0]};
                             rd <= 1;
                         end
