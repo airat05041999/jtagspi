@@ -36,8 +36,8 @@ module spi_top
 //////////////////////////////////////////////////
 //local signal
 //////////////////////////////////////////////////
-logic [31:0] countrst;
-logic [31:0] countwrst;
+logic [31:0] countrst = 0;
+logic [31:0] countwrst = 0;
 logic rst;
 logic clk;
 
@@ -67,7 +67,7 @@ logic work;
 logic busy;
 
 //////////////////////////////////////////////////
-//reset counter
+//reset counter for debugging
 //////////////////////////////////////////////////
 always_ff @(posedge clk) begin
     if (countrst == 0) begin
@@ -104,6 +104,45 @@ always_ff @(posedge clk) begin
         wrst <= 1;
     end
 end
+
+//////////////////////////////////////////////////
+//reset counter for modeling
+//////////////////////////////////////////////////
+/*always_ff @(posedge clk) begin
+    if (countrst == 0) begin
+        rst <= 0;
+        countrst <= countrst + 1;
+    end
+    else if (countrst < 50) begin
+        countrst <= countrst + 1;
+    end
+    else if (countrst < 51) begin
+        countrst <= countrst + 1;
+        rst <= 1;
+    end
+    else if (countrst == 51) begin
+        countrst <= 52;
+        rst <= 0;
+    end
+end
+
+always_ff @(posedge clk) begin
+    if (countwrst == 0) begin
+        wrst <= 1;
+        countwrst <= countwrst + 1;
+    end
+    else if (countwrst < 25) begin
+        countwrst <= countwrst + 1;
+    end
+    else if (countwrst < 30) begin
+        countwrst <= countwrst + 1;
+        wrst <= 0;
+    end
+    else if (countwrst == 30) begin
+        countwrst <= 31;
+        wrst <= 1;
+    end
+end*/
 
 //////////////////////////////////////////////////
 //buffer fifo

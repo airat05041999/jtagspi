@@ -156,6 +156,10 @@ always_ff @(posedge clk) begin
                     busy <= 0;
                     countenable <= 0;
                 end
+                else if (count == (DELAY_SCSN - FREQUENCY_DIVIDER)) begin
+                    shiftregister [(DATA - 1):0] <= rdata [(DATA-1):0];
+                    rd <= 1;
+                end
                 else if ((count > (DELAY_SCSN - 1)) && (count < (FREQUENCY_DIVIDER * len + DELAY_SCSN)) && (count == ((counttransaction - 1) * FREQUENCY_DIVIDER + DELAY_SCSN))) begin 
                         if (counttransaction == len) begin
                             shiftregister <= {nextshiftregister [(DATA-2):0],1'b0};

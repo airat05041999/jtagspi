@@ -123,12 +123,12 @@ always_ff @(posedge clk) begin
                 end 
                 else if (index == 1) begin
                     wr <= 1;
-                    wdata <= 8'hff;
+                    wdata <= 8'ha0;
                     index <= index - 1;
                 end 
                 else if (index == 2) begin
                     wr <= 1;
-                    wdata <= 8'hff;
+                    wdata <= 8'h0f;
                     index <= index - 1;
                 end
                 else if (index == 3) begin
