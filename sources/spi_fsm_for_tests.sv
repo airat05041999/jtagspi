@@ -1,0 +1,186 @@
+//////////////////////////////////////////////////
+//~:(
+//@module: spi_fsm.sv
+//@author: Yafizov Airat
+//@date: 13.1.22
+//@version: 1.0.0
+//@description: spi_fsm_for_tests
+//~:)
+//////////////////////////////////////////////////
+
+module spi_fsm_for_tests
+    #(
+    parameter DATA = 8
+    )
+
+    (
+    //SYSTEM
+    input logic clk,
+    input logic rst,
+    //INPUT_CONTROL
+    output logic [15:0] len,
+    output logic op,
+    output logic work,
+    //OUTPUT_CONTROL
+    input logic busy,
+    //OUTPUT_FIFO
+    output logic [(DATA-1):0] wdata,
+    output logic wr,
+    input logic full,
+    //INPUT_FIFO
+    input logic  [(DATA-1):0] rdata,
+    output logic rd,
+    input logic empty
+    );
+
+//////////////////////////////////////////////////
+//Local types
+//////////////////////////////////////////////////
+
+typedef enum logic [2:0] {ST_IDLE, ST_RUNNING_R, ST_RUNNING_WR} state_type;
+
+//////////////////////////////////////////////////
+//local registers
+//////////////////////////////////////////////////
+
+state_type state;
+logic [2:0] interrupt;
+logic [2:0] index;
+logic permission;
+logic flag;
+
+//////////////////////////////////////////////////
+//Architecture
+////////////////////////////////////////////////// 
+
+//permission block
+always_ff @(posedge clk) begin
+    if(rst) begin
+        permission <= 0;
+        flag <= 0;
+    end 
+    else if ((busy == 1) && (flag == 1)) begin
+        permission <= 0;
+        flag <= 0;
+    end 
+    else if ((busy == 0) && (flag == 0)) begin
+        permission <= 1;
+        flag <= 1;
+    end
+    else if (state != ST_IDLE) begin
+        flag <= 1;
+        permission <= 0;
+    end
+end
+
+
+//state machine
+always_ff @(posedge clk) begin
+    if (rst) begin
+        index <= 0;
+        wr <= 0;
+        rd <= 0;
+        state <= ST_IDLE;
+        op <=0;
+        work <=0;
+        len <= 0;
+        interrupt <= 3;
+    end 
+    else begin
+        case (state)
+            //////////////////////////////////////////////////
+            ST_IDLE : begin
+                work <= 0;
+                op <= 0;
+                wr <= 0;
+                rd <= 0;
+                if (busy == 0) begin
+                    if ((interrupt == 1) && (permission == 1)) begin
+                        state <= ST_RUNNING_R;
+                        index <= 3;
+                        interrupt <= 0;
+                    end
+                    else if ((interrupt == 2) && (permission == 1)) begin
+                        state <= ST_RUNNING_WR;
+                        index <= 5;
+                        interrupt <= 1;
+                    end
+                    else if ((interrupt == 3) && (permission == 1)) begin
+                        state <= ST_RUNNING_R;
+                        index <= 3;
+                        interrupt <= 2;
+                    end
+                end 
+            end
+            //////////////////////////////////////////////////
+            ST_RUNNING_WR : begin  
+                if (index == 0) begin
+                    wr <= 0;
+                    work <= 1;
+                    op <= 1;
+                    state <= ST_IDLE;
+                    len <= 40;
+                end 
+                else if (index == 1) begin
+                    wr <= 1;
+                    wdata <= 8'ha0;
+                    index <= index - 1;
+                end 
+                else if (index == 2) begin
+                    wr <= 1;
+                    wdata <= 8'h0f;
+                    index <= index - 1;
+                end
+                else if (index == 3) begin
+                    wr <= 1;
+                    wdata <= 8'h04;;
+                    index <= index - 1;
+                end    
+                else if (index == 4) begin
+                    wr <= 1;
+                    wdata <= 8'h19;
+                    index <= index - 1;
+                end 
+                else if (index == 5) begin
+                    wr <= 1;
+                    wdata <= 8'h00;
+                    index <= index - 1;
+                end
+            end
+            //////////////////////////////////////////////////
+            ST_RUNNING_R : begin  
+                if (index == 0) begin
+                    wr <= 0;
+                    work <= 1;
+                    op <= 0;
+                    state <= ST_IDLE;
+                    len <= 40;
+                end 
+                else if (index == 1) begin
+                    wr <= 1;
+                    wdata <= 8'h00;
+                    index <= index - 1;
+                end 
+                else if (index == 2) begin
+                    wr <= 1;
+                    wdata <= 8'h19;
+                    index <= index - 1;
+                end
+                else if (index == 3) begin
+                    wr <= 1;
+                    wdata <= 8'h00;
+                    index <= index - 1;
+                end 
+            end
+            //////////////////////////////////////////////////
+            default : begin 
+                state <= ST_IDLE;
+            end
+         endcase
+    end
+end
+
+
+//////////////////////////////////////////////////
+endmodule
+//////////////////////////////////////////////////
