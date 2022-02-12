@@ -88,19 +88,26 @@ localparam BSB_RX_SOCKET_0_REG = 5'b00011;
 //Local types
 //////////////////////////////////////////////////
 
-typedef enum logic [2:0] {ST_IDLE, ST_RUNNING_R, ST_RUNNING_WR, ST_RUNNING_R_CONTROL, ST_RUNNING_WR_INITIAL} state_type;
+typedef enum logic [3:0] {ST_IDLE, ST_RUNNING_WR_INITIAL, 
+ST_RUNNING_R_RSR, ST_RUNNING_WR_RD, ST_CAPTURE_RSR,
+ST_RUNNING_R_CONTROL, ST_RUNNING_WR_CONTROL, ST_CAPTURE_CONTROL,
+ST_RUNNING_R_INT, ST_RUNNING_WR_INT, ST_CAPTURE_INT,
+ST_SEND_RECV, ST_RUNNING_R, ST_CAPTURE_MEM
+} state_type;
 
 //////////////////////////////////////////////////
 //local registers
 //////////////////////////////////////////////////
 
 state_type state;
-logic [2:0] interrupt;
-logic [2:0] index;
+logic [3:0] index;
 logic permission;
 logic flag;
-logic initial_index;
-logic 
+logic flag_control;
+logic flag_recv;
+logic [3:0] initial_index;
+logic [7:0] read_sock;
+logic [15:0] read_sn_rx_rsr;
 
 //////////////////////////////////////////////////
 //Architecture
@@ -138,7 +145,9 @@ always_ff @(posedge clk) begin
         op <=0;
         work <=0;
         len <= 0;
-        interrupt <= 3;
+        read_sock <= 0;
+        flag_control <= 0;
+        flag_recv <= 0;
     end 
     else begin
         case (state)
@@ -154,24 +163,24 @@ always_ff @(posedge clk) begin
                         index <=0;
                     end
                 end
-
-                /*if (busy == 0) begin
-                    if ((interrupt == 1) && (permission == 1)) begin
-                        state <= ST_RUNNING_R;
-                        index <= 3;
-                        interrupt <= 0;
+                else if (read_sock != SOCK_ESTABLISHED) begin
+                    if ((permission == 1) && (busy == 0)) begin
+                        if (flag_control == 1) begin
+                            state <= ST_RUNNING_WR_CONTROL;
+                            index <=0;
+                        end
+                        else begin
+                            state <= ST_RUNNING_R_CONTROL;
+                            index <=0;
+                        end
                     end
-                    else if ((interrupt == 2) && (permission == 1)) begin
-                        state <= ST_RUNNING_WR;
-                        index <= 5;
-                        interrupt <= 1;
+                end
+                else if (flag_recv == 1) begin
+                    if ((permission == 1) && (busy == 0)) begin
+                        state <= ST_SEND_RECV;
+                        index <=0;
                     end
-                    else if ((interrupt == 3) && (permission == 1)) begin
-                        state <= ST_RUNNING_R;
-                        index <= 3;
-                        interrupt <= 2;
-                    end
-                end */
+                end
             end
             //////////////////////////////////////////////////
             ST_RUNNING_WR_INITIAL : begin  
@@ -525,65 +534,225 @@ always_ff @(posedge clk) begin
                 endcase
             end
             //////////////////////////////////////////////////
-            ST_RUNNING_WR : begin  
-                /*if (index == 0) begin
+            ST_RUNNING_WR_CONTROL : begin  
+                case (read_sock)
+                    SOCK_CLOSED: begin
+                        if (index == 4) begin
+                            wr <= 0;
+                            work <= 1;
+                            op <= 1;
+                            state <= ST_IDLE;
+                            len <= 32;
+                            flag_control <= 0;
+                        end 
+                        else if (index == 3) begin
+                            wr <= 1;
+                            wdata <= OPEN;
+                            index <= index + 1;
+                        end
+                        else if (index == 2) begin
+                            wr <= 1;
+                            wdata <= {BSB_SOCKET_0_REG, 1'b1, 2'b0};
+                            index <= index + 1;
+                        end    
+                        else if (index == 1) begin
+                            wr <= 1;
+                            wdata <= ADDR_SN_CR [7:0];
+                            index <= index + 1;
+                        end 
+                        else if (index == 0) begin
+                            wr <= 1;
+                            wdata <= ADDR_SN_CR [15:8]; 
+                            index <= index + 1;
+                        end
+                    end
+                    SOCK_INIT: begin
+                        if (index == 4) begin
+                            wr <= 0;
+                            work <= 1;
+                            op <= 1;
+                            state <= ST_IDLE;
+                            len <= 32;
+                            flag_control <= 0;
+                        end 
+                        else if (index == 3) begin
+                            wr <= 1;
+                            wdata <= LISTEN;
+                            index <= index + 1;
+                        end
+                        else if (index == 2) begin
+                            wr <= 1;
+                            wdata <= {BSB_SOCKET_0_REG, 1'b1, 2'b0};
+                            index <= index + 1;
+                        end    
+                        else if (index == 1) begin
+                            wr <= 1;
+                            wdata <= ADDR_SN_CR [7:0];
+                            index <= index + 1;
+                        end 
+                        else if (index == 0) begin
+                            wr <= 1;
+                            wdata <= ADDR_SN_CR [15:8]; 
+                            index <= index + 1;
+                        end
+                    end
+                    SOCK_CLOSE_WAIT: begin
+                        if (index == 4) begin
+                            wr <= 0;
+                            work <= 1;
+                            op <= 1;
+                            state <= ST_IDLE;
+                            len <= 32;
+                            flag_control <= 0;
+                        end 
+                        else if (index == 3) begin
+                            wr <= 1;
+                            wdata <= DISCON;
+                            index <= index + 1;
+                        end
+                        else if (index == 2) begin
+                            wr <= 1;
+                            wdata <= {BSB_SOCKET_0_REG, 1'b1, 2'b0};
+                            index <= index + 1;
+                        end    
+                        else if (index == 1) begin
+                            wr <= 1;
+                            wdata <= ADDR_SN_CR [7:0];
+                            index <= index + 1;
+                        end 
+                        else if (index == 0) begin
+                            wr <= 1;
+                            wdata <= ADDR_SN_CR [15:8]; 
+                            index <= index + 1;
+                        end
+                    end
+                    default : begin
+                        state <= ST_IDLE;
+                        flag_control <= 0;
+                    end
+                endcase
+            end
+            //////////////////////////////////////////////////
+            ST_RUNNING_R_CONTROL : begin  
+                if (index == 3) begin
+                    wr <= 0;
+                    work <= 1;
+                    op <= 0;
+                    state <= ST_CAPTURE_CONTROL;
+                    len <= 40;
+                end 
+                else if (index == 2) begin
+                    wr <= 1;
+                    wdata <= {BSB_SOCKET_0_REG, 1'b0, 2'b0};
+                    index <= index + 1;
+                end    
+                else if (index == 1) begin
+                    wr <= 1;
+                    wdata <= ADDR_SN_SR [7:0];
+                    index <= index + 1;
+                end 
+                else if (index == 0) begin
+                    wr <= 1;
+                    wdata <= ADDR_SN_SR [15:8]; 
+                    index <= index + 1;
+                end
+            end
+            //////////////////////////////////////////////////
+            ST_SEND_RECV : begin  
+                if (index == 4) begin
                     wr <= 0;
                     work <= 1;
                     op <= 1;
                     state <= ST_IDLE;
-                    len <= 40;
+                    len <= 32;
+                    flag_recv <= 0;
                 end 
-                else if (index == 1) begin
-                    wr <= 1;
-                    wdata <= 8'ha0;
-                    index <= index - 1;
-                end 
-                else if (index == 2) begin
-                    wr <= 1;
-                    wdata <= 8'h0f;
-                    index <= index - 1;
-                end
                 else if (index == 3) begin
                     wr <= 1;
-                    wdata <= 8'h04;;
-                    index <= index - 1;
-                end    
-                else if (index == 4) begin
-                    wr <= 1;
-                    wdata <= 8'h19;
-                    index <= index - 1;
-                end 
-                else if (index == 5) begin
-                    wr <= 1;
-                    wdata <= 8'h00;
-                    index <= index - 1;
+                    wdata <= RECV;
+                    index <= index + 1;
                 end
-            end*/
+                else if (index == 2) begin
+                    wr <= 1;
+                    wdata <= {BSB_SOCKET_0_REG, 1'b1, 2'b0};
+                    index <= index + 1;
+                end    
+                else if (index == 1) begin
+                    wr <= 1;
+                    wdata <= ADDR_SN_CR [7:0];
+                    index <= index + 1;
+                end 
+                else if (index == 0) begin
+                    wr <= 1;
+                    wdata <= ADDR_SN_CR [15:8]; 
+                    index <= index + 1;
+                end
+            end
             //////////////////////////////////////////////////
-            ST_RUNNING_R : begin  
-                /*if (index == 0) begin
+            ST_CAPTURE_CONTROL : begin  
+                    if ((permission == 1) && (busy == 0)) begin
+                        state <= ST_IDLE;
+                        flag_control <= 1;
+                        rd <= 1;
+                        read_sock <= rdata;
+                    end
+            end
+            //////////////////////////////////////////////////
+            ST_RUNNING_WR_RD : begin  
+                if (index == 4) begin
+                    wr <= 0;
+                    work <= 1;
+                    op <= 1;
+                    state <= ST_IDLE;
+                    len <= 32;
+                    flag_recv <= 0;
+                end 
+                else if (index == 3) begin
+                    wr <= 1;
+                    wdata <= RECV;
+                    index <= index + 1;
+                end
+                else if (index == 2) begin
+                    wr <= 1;
+                    wdata <= {BSB_SOCKET_0_REG, 1'b1, 2'b0};
+                    index <= index + 1;
+                end    
+                else if (index == 1) begin
+                    wr <= 1;
+                    wdata <= ADDR_SN_CR [7:0];
+                    index <= index + 1;
+                end 
+                else if (index == 0) begin
+                    wr <= 1;
+                    wdata <= ADDR_SN_CR [15:8]; 
+                    index <= index + 1;
+                end
+            end
+            //////////////////////////////////////////////////
+            ST_RUNNING_R_RSR : begin  
+                if (index == 3) begin
                     wr <= 0;
                     work <= 1;
                     op <= 0;
                     state <= ST_IDLE;
-                    len <= 40;
-                end 
-                else if (index == 1) begin
-                    wr <= 1;
-                    wdata <= 8'h00;
-                    index <= index - 1;
+                    len <= 48;
                 end 
                 else if (index == 2) begin
                     wr <= 1;
-                    wdata <= 8'h19;
-                    index <= index - 1;
-                end
-                else if (index == 3) begin
+                    wdata <= {BSB_SOCKET_0_REG, 1'b0, 2'b0};
+                    index <= index + 1;
+                end    
+                else if (index == 1) begin
                     wr <= 1;
-                    wdata <= 8'h00;
-                    index <= index - 1;
+                    wdata <= ADDR_SN_RX_RSR [7:0];
+                    index <= index + 1;
                 end 
-            end*/
+                else if (index == 0) begin
+                    wr <= 1;
+                    wdata <= ADDR_SN_RX_RSR [15:8]; 
+                    index <= index + 1;
+                end
+            end
             //////////////////////////////////////////////////
             default : begin 
                 state <= ST_IDLE;
