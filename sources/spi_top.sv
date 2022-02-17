@@ -60,6 +60,15 @@ logic full2;
 logic empty2;
 logic usedw2;
 
+//fifo 3 signals
+logic [(DATA-1):0] wdata3;
+logic [(DATA-1):0] rdata3;
+logic wr3;
+logic rd3;
+logic full3;
+logic empty3;
+logic usedw3;
+
 //control signals
 logic [15:0] len;
 logic op;
@@ -167,6 +176,14 @@ fifo #(.FIFO_DEPTH(FIFO_DEPTH), .DATA_WIDTH(DATA))
         .usedw(usedw2)
     );
 
+fifo #(.FIFO_DEPTH(FIFO_DEPTH), .DATA_WIDTH(DATA))
+    fifo_inst3 (
+        .clk(clk), .rst(rst),
+        .wdata(wdata3), .wr(wr3), .full(full3),
+        .rdata(), .rd(), .empty(),
+        .usedw()
+    );
+
 spi_interface #(.DATA(DATA))
     spi_insterface_inst (
         .clk(clk), .rst(rst),
@@ -181,7 +198,8 @@ spi_fsm #(.DATA(DATA))
         .clk(clk), .rst(rst),
         .wdata(wdata1), .wr(wr1), .full(full1),
         .rdata(rdata1), .rd(rd1), .empty(empty1),
-        .len(len), .work(work), .op(op), .busy(busy)
+        .len(len), .work(work), .op(op), .busy(busy),
+        .wdata3(wdata3), .wr3(wr3), .full3(full3),
     );
 
 pll pll_inst (
