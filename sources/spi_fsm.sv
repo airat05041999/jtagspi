@@ -31,11 +31,11 @@ module spi_fsm
     //INPUT_FIFO
     input logic  [(DATA-1):0] rdata,
     output logic rd,
-    input logic empty
+    input logic empty,
     //OUTPUT_FIFO3
     output logic [(DATA-1):0] wdata3,
     output logic wr3,
-    input logic full3,
+    input logic full3
     );
 
 //////////////////////////////////////////////////
@@ -100,7 +100,7 @@ localparam BSB_RX_SOCKET_0_REG = 5'b00011;
 //////////////////////////////////////////////////
 
 typedef enum logic [4:0] {ST_IDLE, ST_RUNNING_WR_INITIAL, 
-ST_RUNNING_R_RSR, ST_RUNNING_WR_RD, ST_CAPTURE_RSR, ST_RUNNING_R_RD, ST_CAPTURE_RD
+ST_RUNNING_R_RSR, ST_RUNNING_WR_RD, ST_CAPTURE_RSR, ST_RUNNING_R_RD, ST_CAPTURE_RD,
 ST_RUNNING_R_CONTROL, ST_RUNNING_WR_CONTROL, ST_CAPTURE_CONTROL,
 ST_RUNNING_R_INT, ST_RUNNING_WR_INT, ST_CAPTURE_INT,
 ST_SEND_RECV, ST_RUNNING_R, ST_CAPTURE_MEM
@@ -111,12 +111,26 @@ ST_SEND_RECV, ST_RUNNING_R, ST_CAPTURE_MEM
 //////////////////////////////////////////////////
 
 state_type state;
-logic [3:0] index;
+//сигналы разрешения
 logic permission;
 logic flag;
+//флаги выбора чтения или записи 
+logic flag_control_int;
 logic flag_control;
-logic flag_recv;
-logic flag_go_rsr;
+//флаги перехода в состояние захвата
+logic flag_go_control_cap;
+logic flag_go_int_cap;
+logic flag_go_mem_cap;
+logic flag_go_rsr_cap;
+logic flag_go_rd_cap;
+//флаги перехода при передачи
+logic flag_go_recv;
+logic flag_go_rsr_rd;
+logic flag_go_rd_rd;
+logic flag_go_rd_wr;
+logic flag_go_read;
+
+logic [15:0] index;
 logic [3:0] initial_index;
 logic [7:0] read_sock;
 logic [7:0] read_int;
@@ -141,6 +155,7 @@ always_ff @(posedge clk) begin
         permission <= 1;
         flag <= 1;
     end
+    //сделать еще иф для капчеров потому что ломается разрешение
     else if (state != ST_IDLE) begin
         flag <= 1;
         permission <= 0;
@@ -159,10 +174,22 @@ always_ff @(posedge clk) begin
         op <=0;
         work <=0;
         len <= 0;
+        flag_control_int <= 0;
+        flag_control <= 0; 
+        flag_go_control_cap <= 0;
+        flag_go_int_cap <= 0;
+        flag_go_mem_cap <= 0;
+        flag_go_rsr_cap <= 0;
+        flag_go_rd_cap <= 0;
+        flag_go_recv <= 0;
+        flag_go_rsr_rd <= 0;
+        flag_go_rd_rd <= 0;
+        flag_go_rd_wr <= 0;
+        flag_go_read <= 0;
         read_sock <= 0;
-        flag_control <= 0;
-        flag_recv <= 0;
-        flag_contol_int <= 0;
+        read_int <= 0;
+        read_sn_rx_rsr <= 0;
+        read_sn_rx_rd <= 0;
     end 
     else begin
         case (state)
@@ -172,46 +199,80 @@ always_ff @(posedge clk) begin
                 op <= 0;
                 wr <= 0;
                 rd <= 0;
+                index <=0;
                 if (initial_index != 0) begin
                     if ((permission == 1) && (busy == 0)) begin
                         state <= ST_RUNNING_WR_INITIAL;
-                        index <=0;
+                    end
+                end
+                else if (flag_go_int_cap == 1) begin
+                    if ((permission == 1) && (busy == 0)) begin
+                        state <= ST_CAPTURE_INT;
+                    end
+                end
+                else if (interrupt == 1) begin
+                    if ((permission == 1) && (busy == 0)) begin
+                        if (flag_control_int == 1) begin
+                            state <= ST_RUNNING_WR_INT;
+                        end
+                        else begin
+                            state <= ST_RUNNING_R_INT;
+                        end
+                    end
+                end
+                else if (flag_go_control_cap == 1) begin
+                    if ((permission == 1) && (busy == 0)) begin
+                        state <= ST_CAPTURE_CONTROL;
                     end
                 end
                 else if ((read_sock != SOCK_ESTABLISHED) && (read_sock != SOCK_LISTEN)) begin
                     if ((permission == 1) && (busy == 0)) begin
                         if (flag_control == 1) begin
                             state <= ST_RUNNING_WR_CONTROL;
-                            index <=0;
                         end
                         else begin
                             state <= ST_RUNNING_R_CONTROL;
-                            index <=0;
                         end
                     end
                 end
-                else if (interrupt == 0) begin
-                    if ((permission == 1) && (busy == 0)) begin
-                        if (flag_contol_int == 1) begin
-                            state <= ST_RUNNING_WR_INT;
-                            index <=0;
-                        end
-                        else begin
-                            state <= ST_RUNNING_R_INT;
-                            index <=0;
-                        end
-                    end
-                end
-                else if (flag_recv == 1) begin
+                else if (flag_go_recv == 1) begin
                     if ((permission == 1) && (busy == 0)) begin
                         state <= ST_SEND_RECV;
-                        index <=0;
                     end
                 end
-                else if (flag_go_rsr == 1) begin
+                else if (flag_go_mem_cap == 1) begin
+                    if ((permission == 1) && (busy == 0)) begin
+                        state <= ST_CAPTURE_MEM;
+                    end
+                end
+                else if (flag_go_rsr_cap == 1) begin
+                    if ((permission == 1) && (busy == 0)) begin
+                        state <= ST_CAPTURE_RSR;
+                    end
+                end
+                else if (flag_go_rd_cap == 1) begin
+                    if ((permission == 1) && (busy == 0)) begin
+                        state <= ST_CAPTURE_RD;
+                    end
+                end
+                else if (flag_go_rsr_rd == 1) begin
                     if ((permission == 1) && (busy == 0)) begin
                         state <= ST_RUNNING_R_RSR;
-                        index <=0;
+                    end
+                end
+                else if (flag_go_rd_rd == 1) begin
+                    if ((permission == 1) && (busy == 0)) begin
+                        state <= ST_RUNNING_R_RD;
+                    end
+                end
+                else if (flag_go_rd_wr == 1) begin
+                    if ((permission == 1) && (busy == 0)) begin
+                        state <= ST_RUNNING_WR_RD;
+                    end
+                end
+                else if (flag_go_read == 1) begin
+                    if ((permission == 1) && (busy == 0)) begin
+                        state <= ST_RUNNING_R;
                     end
                 end
             end
@@ -320,8 +381,9 @@ always_ff @(posedge clk) begin
                     wr <= 0;
                     work <= 1;
                     op <= 0;
-                    state <= ST_CAPTURE_CONTROL;
+                    state <= ST_IDLE;
                     len <= 32;
+                    flag_go_control_cap <= 1;
                 end 
                 else if (index == 2) begin
                     wr <= 1;
@@ -341,12 +403,11 @@ always_ff @(posedge clk) begin
             end
             //////////////////////////////////////////////////
             ST_CAPTURE_CONTROL : begin  
-                    if ((permission == 1) && (busy == 0)) begin
-                        state <= ST_IDLE;
-                        flag_control <= 1;
-                        rd <= 1;
-                        read_sock <= rdata;
-                    end
+                state <= ST_IDLE;
+                flag_control <= 1;
+                flag_go_control_cap <= 0;
+                rd <= 1;
+                read_sock <= rdata;
             end
             //////////////////////////////////////////////////
             ST_RUNNING_WR_INT : begin  
@@ -358,7 +419,7 @@ always_ff @(posedge clk) begin
                             op <= 1;
                             state <= ST_IDLE;
                             len <= 32;
-                            flag_contol_int <= 0;
+                            flag_control_int <= 0;
                             read_sock <= 8'hff;
                         end 
                         else if (index == 3) begin
@@ -389,7 +450,7 @@ always_ff @(posedge clk) begin
                             op <= 1;
                             state <= ST_IDLE;
                             len <= 32;
-                            flag_contol_int <= 0;
+                            flag_control_int <= 0;
                             read_sock <= 8'hff;
                         end 
                         else if (index == 3) begin
@@ -419,9 +480,9 @@ always_ff @(posedge clk) begin
                             work <= 1;
                             op <= 1;
                             state <= ST_IDLE;
-                            flag_go_rsr <= 1;
+                            flag_go_rsr_rd <= 1;
                             len <= 32;
-                            flag_contol_int <= 0;
+                            flag_control_int <= 0;
                         end 
                         else if (index == 3) begin
                             wr <= 1;
@@ -451,8 +512,8 @@ always_ff @(posedge clk) begin
                             op <= 1;
                             state <= ST_IDLE;
                             len <= 32;
-                            flag_contol_int <= 0;
-                            ////////////////
+                            flag_control_int <= 0;
+                            read_sock <= 8'hff;
                         end 
                         else if (index == 3) begin
                             wr <= 1;
@@ -477,7 +538,7 @@ always_ff @(posedge clk) begin
                     end
                     default : begin
                         state <= ST_IDLE;
-                        flag_contol_int <= 0;
+                        flag_control_int <= 0;
                     end
                 endcase
             end
@@ -487,7 +548,8 @@ always_ff @(posedge clk) begin
                     wr <= 0;
                     work <= 1;
                     op <= 0;
-                    state <= ST_CAPTURE_INT;
+                    state <= ST_IDLE;
+                    flag_go_int_cap <= 1;
                     len <= 32;
                 end 
                 else if (index == 2) begin
@@ -508,12 +570,11 @@ always_ff @(posedge clk) begin
             end
             //////////////////////////////////////////////////
             ST_CAPTURE_INT : begin  
-                    if ((permission == 1) && (busy == 0)) begin
                         state <= ST_IDLE;
-                        flag_contol_int <= 1;
+                        flag_control_int <= 1;
+                        flag_go_int_cap <= 0;
                         rd <= 1;
                         read_int <= rdata;
-                    end
             end
             //////////////////////////////////////////////////
             ST_SEND_RECV : begin  
@@ -523,7 +584,7 @@ always_ff @(posedge clk) begin
                     op <= 1;
                     state <= ST_IDLE;
                     len <= 32;
-                    flag_recv <= 0;
+                    flag_go_recv <= 0;
                 end 
                 else if (index == 3) begin
                     wr <= 1;
@@ -554,7 +615,8 @@ always_ff @(posedge clk) begin
                     op <= 1;
                     state <= ST_IDLE;
                     len <= 40;
-                    flag_recv <= 1;
+                    flag_go_recv <= 1;
+                    flag_go_rd_wr <= 0;
                 end 
                 else if (index == 4) begin
                     wr <= 1;
@@ -584,19 +646,20 @@ always_ff @(posedge clk) begin
             end
             //////////////////////////////////////////////////
             ST_CAPTURE_MEM : begin  
-                if ((permission == 1) && (busy == 0)) begin
-                    if (index == read_sn_rx_rsr)
-                        state <= ST_RUNNING_WR_RD;
-                        rd <= 0;
-                        wr3 <= 0;
-                        index <= 0;
-                        read_sn_rx_rd <= read_sn_rx_rsr + read_sn_rx_rd;
-                    else if (index < read_sn_rx_rsr) begin
-                        rd <= 1;
-                        wr3 <= 1;
-                        wdata3 <= rdata;
-                        index <= index + 1;
-                    end
+                if (index == read_sn_rx_rsr) begin
+                    state <= ST_IDLE;
+                    flag_go_mem_cap <= 0;
+                    flag_go_rd_wr <= 1;
+                    rd <= 0;
+                    wr3 <= 0;
+                    index <= 0;
+                    read_sn_rx_rd <= read_sn_rx_rsr + read_sn_rx_rd;
+                end
+                else if (index < read_sn_rx_rsr) begin
+                    rd <= 1;
+                    wr3 <= 1;
+                    wdata3 <= rdata;
+                    index <= index + 1;
                 end
             end
             //////////////////////////////////////////////////
@@ -605,7 +668,9 @@ always_ff @(posedge clk) begin
                     wr <= 0;
                     work <= 1;
                     op <= 0;
-                    state <= ST_CAPTURE_MEM;
+                    state <= ST_IDLE;
+                    flag_go_mem_cap <= 1;
+                    flag_go_read <= 0;
                     len <= 24 + (read_sn_rx_rsr * 8);
                     index <= 0;
                 end 
@@ -627,21 +692,22 @@ always_ff @(posedge clk) begin
             end
             //////////////////////////////////////////////////
             ST_CAPTURE_RD : begin  
-                if ((permission == 1) && (busy == 0)) begin
-                    if (index == 2)
-                        state <= ST_RUNNING_R;
-                        rd <= 0;
-                        index <= 0;
-                    else if (index == 1) begin
-                        rd <= 1;
-                        read_sn_rx_rd [15:8] <= rdata;
-                        index <= index + 1;
-                    end
-                    else if (index == 0) begin
-                        rd <= 1;
-                        read_sn_rx_rd [7:0] <= rdata;
-                        index <= index + 1;
-                    end
+                if (index == 2) begin
+                    state <= ST_IDLE;
+                    flag_go_rd_cap <= 0;
+                    flag_go_read <= 1;
+                    rd <= 0;
+                    index <= 0;
+                end
+                else if (index == 1) begin
+                    rd <= 1;
+                    read_sn_rx_rd [15:8] <= rdata;
+                    index <= index + 1;
+                end
+                else if (index == 0) begin
+                    rd <= 1;
+                    read_sn_rx_rd [7:0] <= rdata;
+                    index <= index + 1;
                 end
             end
             //////////////////////////////////////////////////
@@ -650,7 +716,9 @@ always_ff @(posedge clk) begin
                     wr <= 0;
                     work <= 1;
                     op <= 0;
-                    state <= ST_CAPTURE_RD;
+                    state <= ST_IDLE;
+                    flag_go_rd_cap <= 1;
+                    flag_go_rd_rd <= 0;
                     len <= 40;
                     index <= 0;
                 end 
@@ -672,21 +740,22 @@ always_ff @(posedge clk) begin
             end
             //////////////////////////////////////////////////
             ST_CAPTURE_RSR : begin  
-                if ((permission == 1) && (busy == 0)) begin
-                    if (index == 2)
-                        state <= ST_RUNNING_R_RD;
-                        rd <= 0;
-                        index <= 0;
-                    else if (index == 1) begin
-                        rd <= 1;
-                        read_sn_rx_rsr [15:8] <= rdata;
-                        index <= index + 1;
-                    end
-                    else if (index == 0) begin
-                        rd <= 1;
-                        read_sn_rx_rsr [7:0] <= rdata;
-                        index <= index + 1;
-                    end
+                if (index == 2) begin
+                    state <= ST_IDLE;
+                    flag_go_rsr_cap <= 0;
+                    flag_go_rd_rd <= 1;
+                    rd <= 0;
+                    index <= 0;
+                end
+                else if (index == 1) begin
+                    rd <= 1;
+                    read_sn_rx_rsr [15:8] <= rdata;
+                    index <= index + 1;
+                end
+                else if (index == 0) begin
+                    rd <= 1;
+                    read_sn_rx_rsr [7:0] <= rdata;
+                    index <= index + 1;
                 end
             end
             //////////////////////////////////////////////////
@@ -695,10 +764,12 @@ always_ff @(posedge clk) begin
                     wr <= 0;
                     work <= 1;
                     op <= 0;
-                    state <= ST_CAPTURE_RSR;
+                    state <= ST_IDLE;
+                    flag_go_rsr_cap <= 1;
+                    flag_go_rsr_rd <= 0;
                     len <= 40;
                     index <= 0;
-                    flag_go_rsr <= 0;
+                    flag_go_rsr_rd <= 0;
                 end 
                 else if (index == 2) begin
                     wr <= 1;
@@ -783,6 +854,7 @@ always_ff @(posedge clk) begin
                                 wdata <= ADDR_SN_MR [15:8]; 
                                 index <= index + 1;
                             end
+                        end
                     3:  begin
                             if (index == 4) begin
                                 wr <= 0;
@@ -812,6 +884,7 @@ always_ff @(posedge clk) begin
                                 wdata <= ADDR_SIMR [15:8]; 
                                 index <= index + 1;
                             end
+                        end
                     4:  begin
                             if (index == 7) begin
                                 wr <= 0;
