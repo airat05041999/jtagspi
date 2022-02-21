@@ -156,7 +156,7 @@ always_ff @(posedge clk) begin
         flag <= 1;
     end
     //сделать еще иф для капчеров потому что ломается разрешение
-    else if (state != ST_IDLE) begin
+    else if ((state != ST_IDLE) && (state != ST_CAPTURE_RD) && (state != ST_CAPTURE_INT) && (state != ST_CAPTURE_MEM) && (state != ST_CAPTURE_RSR) && (state != ST_CAPTURE_CONTROL)) begin
         flag <= 1;
         permission <= 0;
     end
@@ -210,7 +210,7 @@ always_ff @(posedge clk) begin
                         state <= ST_CAPTURE_INT;
                     end
                 end
-                else if (interrupt == 1) begin
+                else if (interrupt == 0) begin
                     if ((permission == 1) && (busy == 0)) begin
                         if (flag_control_int == 1) begin
                             state <= ST_RUNNING_WR_INT;

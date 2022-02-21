@@ -20,6 +20,7 @@ module spi_top
     input logic clknotpll,
     //INPUT_CONTROL
     //input logic interrupt, 
+	 input logic interrupt,
     //INPUT_SPI
     input logic miso,
     //OUTPUT_SPI
@@ -199,7 +200,7 @@ spi_fsm #(.DATA(DATA))
         .wdata(wdata1), .wr(wr1), .full(full1),
         .rdata(rdata1), .rd(rd1), .empty(empty1),
         .len(len), .work(work), .op(op), .busy(busy),
-        .wdata3(wdata3), .wr3(wr3), .full3(full3),
+        .wdata3(wdata3), .wr3(wr3), .full3(full3), .interrupt(interrupt)
     );
 
 pll pll_inst (
