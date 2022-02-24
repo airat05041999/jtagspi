@@ -1,22 +1,40 @@
 ﻿// tcp_client.cpp : Этот файл содержит функцию "main". Здесь начинается и заканчивается выполнение программы.
 //
 
-
+#define WIN32_LEAN_AND_MEAN
 #include <iostream>
 #include <cstdio>
 #include <stdio.h>
 #include <string.h>
 #include <windows.h>
+#include <winsock2.h>
+#include <ws2tcpip.h>
+#include <stdlib.h>
+#include <stdio.h>
+#pragma comment (lib, "Ws2_32.lib")
+#pragma comment (lib, "Mswsock.lib")
+#pragma comment (lib, "AdvApi32.lib")
 using namespace std;
-
+int i_error = 0;
 int main(void)
 {
+    //0. настройка библиотеки Ws2_32.dll
+    WSADATA wsaData;//определяем переменную
+    i_error = WSAStartup(MAKEWORD(2, 2), &wsaData);//настраиваем
+    if (i_error)
+    {
+        printf("ERROR!\n");
+    }
+    else
+    {
+        printf("Biblioteka uspehno sozdana!\n");
+    }
     int socket_desc;
-    struct sockaddr_in server_addr;
-    char server_message[2000], client_message[2000];
+    struct sockaddr_in server_addr {};;
+    char client_message[2000];
+
 
     // Очистить буферы:
-    memset(server_message, '\0', sizeof(server_message));
     memset(client_message, '\0', sizeof(client_message));
 
     // Создаем сокет:
@@ -30,9 +48,9 @@ int main(void)
     printf("Socket created successfully\n");
 
     // порт и IP:
-    server_addr.sin_family = AF_INET;
-    server_addr.sin_port = htons(1388);
-    server_addr.sin_addr.s_addr = inet_addr("192.198.1.2");
+    server_addr.sin_port = htons(5000);
+    inet_pton(AF_INET, "0.0.0.0", &server_addr.sin_addr.s_addr);
+
 
     // Отправляем запрос на подключение к серверу:
     if (connect(socket_desc, (struct sockaddr*)&server_addr, sizeof(server_addr)) < 0) {
