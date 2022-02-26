@@ -50,11 +50,11 @@ int main(void)
     // порт и IP:
     server_addr.sin_port = htons(5000);
     server_addr.sin_family = AF_INET;
-    inet_pton(AF_INET, "192.168.1.2", &server_addr.sin_addr.s_addr);
+    inet_pton(AF_INET, "192.168.1.2", &server_addr.sin_addr);
 
 
     // Отправляем запрос на подключение к серверу:
-    if (connect(socket_desc, (SOCKADDR*) &server_addr, sizeof(server_addr)) < 0) {
+    if (connect(socket_desc, (struct sockaddr*)&server_addr, sizeof(server_addr)) < 0) {
         printf("Unable to connect\n");
         return -1;
     }
