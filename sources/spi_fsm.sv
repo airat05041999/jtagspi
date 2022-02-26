@@ -57,6 +57,9 @@ localparam SN_IR_RECV = 8'h04;
 localparam SN_IR_DISCON = 8'h02;
 localparam SN_IR_CON = 8'h01;
 localparam NUMBER_REG = 9;
+localparam PHYCFGR_1 = 8'b11111111;
+localparam PHYCFGR_2 = 8'b01111111;
+localparam PHYCFGR_3 = 8'b11111000;
 
 //addr_registers
 localparam ADDR_MR = 16'h0000;
@@ -74,7 +77,7 @@ localparam ADDR_SN_IR = 16'h0002;
 localparam ADDR_SN_PORT = 16'h0004;
 localparam ADDR_SN_RX_RSR = 16'h0026;
 localparam ADDR_SN_RX_RD = 16'h0028;
-
+localparam ADDR_PHYCFGR = 16'h002e;
 
 //state_SN_CR
 localparam OPEN = 8'h01;
@@ -103,7 +106,8 @@ typedef enum logic [4:0] {ST_IDLE, ST_RUNNING_WR_INITIAL,
 ST_RUNNING_R_RSR, ST_RUNNING_WR_RD, ST_CAPTURE_RSR, ST_RUNNING_R_RD, ST_CAPTURE_RD,
 ST_RUNNING_R_CONTROL, ST_RUNNING_WR_CONTROL, ST_CAPTURE_CONTROL,
 ST_RUNNING_R_INT, ST_RUNNING_WR_INT, ST_CAPTURE_INT,
-ST_SEND_RECV, ST_RUNNING_R, ST_CAPTURE_MEM
+ST_SEND_RECV, ST_RUNNING_R, ST_CAPTURE_MEM,
+ST_RUNNING_R_PHY, ST_RUNNING_WR_PHY, ST_CAPTURE_PHY
 } state_type;
 
 //////////////////////////////////////////////////
@@ -129,11 +133,15 @@ logic flag_go_rsr_rd;
 logic flag_go_rd_rd;
 logic flag_go_rd_wr;
 logic flag_go_read;
+//флаги PHY
+logic flag_phy;
+logic flag_go_cap_phy;
 
 logic [15:0] index;
 logic [3:0] initial_index;
 logic [7:0] read_sock;
 logic [7:0] read_int;
+logic [7:0] read_phy;
 logic [15:0] read_sn_rx_rsr;
 logic [15:0] read_sn_rx_rd;
 
@@ -190,6 +198,9 @@ always_ff @(posedge clk) begin
         read_int <= 0;
         read_sn_rx_rsr <= 0;
         read_sn_rx_rd <= 0;
+        flag_phy <= 0;
+        flag_go_cap_phy <= 0;
+        read_phy <= 0;
     end 
     else begin
         case (state)
@@ -203,6 +214,21 @@ always_ff @(posedge clk) begin
                 if (initial_index != 0) begin
                     if ((permission == 1) && (busy == 0)) begin
                         state <= ST_RUNNING_WR_INITIAL;
+                    end
+                end
+                else if (flag_go_cap_phy == 1) begin
+                    if ((permission == 1) && (busy == 0)) begin
+                        state <= ST_CAPTURE_PHY;
+                    end
+                end
+                else if (read_phy != PHYCFGR_3) begin
+                    if ((permission == 1) && (busy == 0)) begin
+                        if (flag_phy == 1) begin
+                            state <= ST_RUNNING_WR_PHY;
+                        end
+                        else begin
+                            state <= ST_RUNNING_R_PHY;
+                        end
                     end
                 end
                 else if (flag_go_int_cap == 1) begin
@@ -275,6 +301,109 @@ always_ff @(posedge clk) begin
                         state <= ST_RUNNING_R;
                     end
                 end
+            end
+            //////////////////////////////////////////////////
+            ST_RUNNING_WR_PHY : begin  
+                case (read_phy)
+                    PHYCFGR_1: begin
+                        if (index == 4) begin
+                            wr <= 0;
+                            work <= 1;
+                            op <= 1;
+                            state <= ST_IDLE;
+                            len <= 32;
+                            flag_phy <= 0;
+                        end 
+                        else if (index == 3) begin
+                            wr <= 1;
+                            wdata <= PHYCFGR_2;
+                            index <= index + 1;
+                        end
+                        else if (index == 2) begin
+                            wr <= 1;
+                            wdata <= {BSB_REGULAR_REG, 1'b1, 2'b0};
+                            index <= index + 1;
+                        end    
+                        else if (index == 1) begin
+                            wr <= 1;
+                            wdata <= ADDR_PHYCFGR [7:0];
+                            index <= index + 1;
+                        end 
+                        else if (index == 0) begin
+                            wr <= 1;
+                            wdata <= ADDR_PHYCFGR [15:8]; 
+                            index <= index + 1;
+                        end
+                    end
+                    PHYCFGR_2: begin
+                        if (index == 4) begin
+                            wr <= 0;
+                            work <= 1;
+                            op <= 1;
+                            state <= ST_IDLE;
+                            len <= 32;
+                            flag_phy <= 0;
+                        end 
+                        else if (index == 3) begin
+                            wr <= 1;
+                            wdata <= PHYCFGR_3;
+                            index <= index + 1;
+                        end
+                        else if (index == 2) begin
+                            wr <= 1;
+                            wdata <= {BSB_REGULAR_REG, 1'b1, 2'b0};
+                            index <= index + 1;
+                        end    
+                        else if (index == 1) begin
+                            wr <= 1;
+                            wdata <= ADDR_PHYCFGR [7:0];
+                            index <= index + 1;
+                        end 
+                        else if (index == 0) begin
+                            wr <= 1;
+                            wdata <= ADDR_PHYCFGR [15:8]; 
+                            index <= index + 1;
+                        end
+                    end
+                    default : begin
+                        state <= ST_IDLE;
+                        flag_phy <= 0;
+                    end
+                endcase
+            end
+            //////////////////////////////////////////////////
+            ST_RUNNING_R_PHY : begin  
+                if (index == 3) begin
+                    wr <= 0;
+                    work <= 1;
+                    op <= 0;
+                    state <= ST_IDLE;
+                    len <= 32;
+                    flag_go_cap_phy <= 1;
+                end 
+                else if (index == 2) begin
+                    wr <= 1;
+                    wdata <= {BSB_REGULAR_REG, 1'b0, 2'b0};
+                    index <= index + 1;
+                end    
+                else if (index == 1) begin
+                    wr <= 1;
+                    wdata <= ADDR_PHYCFGR [7:0];
+                    index <= index + 1;
+                end 
+                else if (index == 0) begin
+                    wr <= 1;
+                    wdata <= ADDR_PHYCFGR [15:8]; 
+                    index <= index + 1;
+                end
+            end
+            //////////////////////////////////////////////////
+            ST_CAPTURE_PHY : begin  
+                state <= ST_IDLE;
+                flag_phy <= 1;
+                flag_go_cap_phy <= 0;
+                rd <= 1;
+                read_phy <= rdata;
             end
             //////////////////////////////////////////////////
             ST_RUNNING_WR_CONTROL : begin  
