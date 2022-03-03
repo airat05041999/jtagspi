@@ -52,10 +52,6 @@ localparam SIPR = 32'hc0a80102;
 localparam SIMR = 8'h01;
 localparam SN_MR = 8'h01;
 localparam SN_PORT = 16'h1388;
-localparam SN_IR_TIMEOUT = 8'h08;
-localparam SN_IR_RECV = 8'h04;
-localparam SN_IR_DISCON = 8'h02;
-localparam SN_IR_CON = 8'h01;
 localparam NUMBER_REG = 9;
 localparam PHYCFGR_0 = 8'hbf;
 localparam PHYCFGR_WR = 8'hff;
@@ -85,6 +81,12 @@ localparam ADDR_SN_RX_RSR = 16'h0026;
 localparam ADDR_SN_RX_RD = 16'h0028;
 localparam ADDR_PHYCFGR = 16'h002e;
 
+//Sn_IR
+localparam SN_IR_TIMEOUT = 8'h08;
+localparam SN_IR_RECV = 8'h04;
+localparam SN_IR_DISCON = 8'h02;
+localparam SN_IR_CON = 8'h01;
+
 //state_SN_CR
 localparam OPEN = 8'h01;
 localparam LISTEN = 8'h02;
@@ -108,7 +110,7 @@ localparam BSB_RX_SOCKET_0_REG = 5'b00011;
 //Local types
 //////////////////////////////////////////////////
 
-typedef enum logic [4:0] {ST_IDLE, ST_RUNNING_WR_INITIAL, 
+typedef enum logic [4:0] {ST_IDLE, ST_PREPARATION, ST_RUNNING_WR_INITIAL, 
 ST_RUNNING_R_RSR, ST_RUNNING_WR_RD, ST_CAPTURE_RSR, ST_RUNNING_R_RD, ST_CAPTURE_RD,
 ST_RUNNING_R_CONTROL, ST_RUNNING_WR_CONTROL, ST_CAPTURE_CONTROL,
 ST_RUNNING_R_INT, ST_RUNNING_WR_INT, ST_CAPTURE_INT,
@@ -152,7 +154,7 @@ logic [15:0] read_sn_rx_rd;
 ////////////////////////////////////////////////// 
 
 //permission block
-always_ff @(posedge clk) begin
+/*always_ff @(posedge clk) begin
     if(rst) begin
         permission <= 0;
         flag <= 0;
@@ -166,11 +168,11 @@ always_ff @(posedge clk) begin
         flag <= 1;
     end
     //сделать еще иф для капчеров потому что ломается разрешение
-    else if ((state != ST_IDLE) && (state != ST_CAPTURE_RD) && (state != ST_CAPTURE_INT) && (state != ST_CAPTURE_MEM) && (state != ST_CAPTURE_RSR) && (state != ST_CAPTURE_CONTROL)) begin
+    else if ((state != ST_IDLE) && (state != ST_PREPARATION)) begin
         flag <= 1;
         permission <= 0;
     end
-end
+end*/
 
 
 //state machine
@@ -180,7 +182,7 @@ always_ff @(posedge clk) begin
         index <= 0;
         wr <= 0;
         rd <= 0;
-        state <= ST_IDLE;
+        state <= ST_PREPARATION;
         op <=0;
         work <=0;
         len <= 0;
@@ -204,86 +206,64 @@ always_ff @(posedge clk) begin
     else begin
         case (state)
             //////////////////////////////////////////////////
-            ST_IDLE : begin
+            ST_PREPARATION : begin
                 work <= 0;
                 op <= 0;
                 wr <= 0;
                 rd <= 0;
                 index <=0;
-                if (initial_index != 0) begin
-                    if ((permission == 1) && (busy == 0)) begin
-                        state <= ST_RUNNING_WR_INITIAL;
+                state <= ST_IDLE;
+            end
+            //////////////////////////////////////////////////
+            ST_IDLE : begin
+                if ((initial_index != 0) && (busy == 0)) begin
+                    state <= ST_RUNNING_WR_INITIAL;
+                end
+                else if ((flag_go_int_cap == 1) && (busy == 0)) begin
+                    state <= ST_CAPTURE_INT;
+                end
+                else if ((interrupt == 0) && (busy == 0)) begin
+                    if (flag_control_int == 1) begin
+                        state <= ST_RUNNING_WR_INT;
+                    end
+                    else begin
+                        state <= ST_RUNNING_R_INT;
                     end
                 end
-                else if (flag_go_int_cap == 1) begin
-                    if ((permission == 1) && (busy == 0)) begin
-                        state <= ST_CAPTURE_INT;
+                else if ((flag_go_control_cap == 1) && (busy == 0)) begin
+                    state <= ST_CAPTURE_CONTROL;
+                end
+                else if ((read_sock != SOCK_ESTABLISHED) && (read_sock != SOCK_LISTEN) && (busy == 0)) begin
+                    if (flag_control == 1) begin
+                        state <= ST_RUNNING_WR_CONTROL;
+                    end
+                    else begin
+                        state <= ST_RUNNING_R_CONTROL;
                     end
                 end
-                else if (interrupt == 0) begin
-                    if ((permission == 1) && (busy == 0)) begin
-                        if (flag_control_int == 1) begin
-                            state <= ST_RUNNING_WR_INT;
-                        end
-                        else begin
-                            state <= ST_RUNNING_R_INT;
-                        end
-                    end
+                else if ((flag_go_recv == 1) && (busy == 0)) begin
+                    state <= ST_SEND_RECV;
                 end
-                else if (flag_go_control_cap == 1) begin
-                    if ((permission == 1) && (busy == 0)) begin
-                        state <= ST_CAPTURE_CONTROL;
-                    end
+                else if ((flag_go_mem_cap == 1) && (busy == 0)) begin
+                    state <= ST_CAPTURE_MEM;
                 end
-                else if ((read_sock != SOCK_ESTABLISHED) && (read_sock != SOCK_LISTEN)) begin
-                    if ((permission == 1) && (busy == 0)) begin
-                        if (flag_control == 1) begin
-                            state <= ST_RUNNING_WR_CONTROL;
-                        end
-                        else begin
-                            state <= ST_RUNNING_R_CONTROL;
-                        end
-                    end
+                else if ((flag_go_rsr_cap == 1) && (busy == 0)) begin
+                    state <= ST_CAPTURE_RSR;
                 end
-                else if (flag_go_recv == 1) begin
-                    if ((permission == 1) && (busy == 0)) begin
-                        state <= ST_SEND_RECV;
-                    end
+                else if ((flag_go_rd_cap == 1) && (busy == 0)) begin
+                    state <= ST_CAPTURE_RD;
                 end
-                else if (flag_go_mem_cap == 1) begin
-                    if ((permission == 1) && (busy == 0)) begin
-                        state <= ST_CAPTURE_MEM;
-                    end
+                else if ((flag_go_rsr_rd == 1) && (busy == 0)) begin
+                    state <= ST_RUNNING_R_RSR;
                 end
-                else if (flag_go_rsr_cap == 1) begin
-                    if ((permission == 1) && (busy == 0)) begin
-                        state <= ST_CAPTURE_RSR;
-                    end
+                else if ((flag_go_rd_rd == 1) && (busy == 0)) begin
+                    state <= ST_RUNNING_R_RD;
                 end
-                else if (flag_go_rd_cap == 1) begin
-                    if ((permission == 1) && (busy == 0)) begin
-                        state <= ST_CAPTURE_RD;
-                    end
+                else if ((flag_go_rd_wr == 1) && (busy == 0)) begin
+                    state <= ST_RUNNING_WR_RD;
                 end
-                else if (flag_go_rsr_rd == 1) begin
-                    if ((permission == 1) && (busy == 0)) begin
-                        state <= ST_RUNNING_R_RSR;
-                    end
-                end
-                else if (flag_go_rd_rd == 1) begin
-                    if ((permission == 1) && (busy == 0)) begin
-                        state <= ST_RUNNING_R_RD;
-                    end
-                end
-                else if (flag_go_rd_wr == 1) begin
-                    if ((permission == 1) && (busy == 0)) begin
-                        state <= ST_RUNNING_WR_RD;
-                    end
-                end
-                else if (flag_go_read == 1) begin
-                    if ((permission == 1) && (busy == 0)) begin
-                        state <= ST_RUNNING_R;
-                    end
+                else if ((flag_go_read == 1) && (busy == 0)) begin
+                    state <= ST_RUNNING_R;
                 end
             end
             //////////////////////////////////////////////////
@@ -294,7 +274,7 @@ always_ff @(posedge clk) begin
                             wr <= 0;
                             work <= 1;
                             op <= 1;
-                            state <= ST_IDLE;
+                            state <= ST_PREPARATION;
                             len <= 32;
                             flag_control <= 0;
                         end 
@@ -324,7 +304,7 @@ always_ff @(posedge clk) begin
                             wr <= 0;
                             work <= 1;
                             op <= 1;
-                            state <= ST_IDLE;
+                            state <= ST_PREPARATION;
                             len <= 32;
                             flag_control <= 0;
                         end 
@@ -354,7 +334,7 @@ always_ff @(posedge clk) begin
                             wr <= 0;
                             work <= 1;
                             op <= 1;
-                            state <= ST_IDLE;
+                            state <= ST_PREPARATION;
                             len <= 32;
                             flag_control <= 0;
                         end 
@@ -380,7 +360,7 @@ always_ff @(posedge clk) begin
                         end
                     end
                     default : begin
-                        state <= ST_IDLE;
+                        state <= ST_PREPARATION;
                         flag_control <= 0;
                     end
                 endcase
@@ -391,7 +371,7 @@ always_ff @(posedge clk) begin
                     wr <= 0;
                     work <= 1;
                     op <= 0;
-                    state <= ST_IDLE;
+                    state <= ST_PREPARATION;
                     len <= 32;
                     flag_go_control_cap <= 1;
                 end 
@@ -413,7 +393,7 @@ always_ff @(posedge clk) begin
             end
             //////////////////////////////////////////////////
             ST_CAPTURE_CONTROL : begin  
-                state <= ST_IDLE;
+                state <= ST_PREPARATION;
                 flag_control <= 1;
                 flag_go_control_cap <= 0;
                 rd <= 1;
@@ -427,10 +407,11 @@ always_ff @(posedge clk) begin
                             wr <= 0;
                             work <= 1;
                             op <= 1;
-                            state <= ST_IDLE;
+                            state <= ST_PREPARATION;
                             len <= 32;
                             flag_control_int <= 0;
                             read_sock <= 8'hff;
+                            flag_control <= 0;
                         end 
                         else if (index == 3) begin
                             wr <= 1;
@@ -458,10 +439,11 @@ always_ff @(posedge clk) begin
                             wr <= 0;
                             work <= 1;
                             op <= 1;
-                            state <= ST_IDLE;
+                            state <= ST_PREPARATION;
                             len <= 32;
                             flag_control_int <= 0;
                             read_sock <= 8'hff;
+                            flag_control <= 0;
                         end 
                         else if (index == 3) begin
                             wr <= 1;
@@ -489,7 +471,7 @@ always_ff @(posedge clk) begin
                             wr <= 0;
                             work <= 1;
                             op <= 1;
-                            state <= ST_IDLE;
+                            state <= ST_PREPARATION;
                             flag_go_rsr_rd <= 1;
                             len <= 32;
                             flag_control_int <= 0;
@@ -520,10 +502,11 @@ always_ff @(posedge clk) begin
                             wr <= 0;
                             work <= 1;
                             op <= 1;
-                            state <= ST_IDLE;
+                            state <= ST_PREPARATION;
                             len <= 32;
                             flag_control_int <= 0;
                             read_sock <= 8'hff;
+                            flag_control <= 0;
                         end 
                         else if (index == 3) begin
                             wr <= 1;
@@ -547,7 +530,7 @@ always_ff @(posedge clk) begin
                         end
                     end
                     default : begin
-                        state <= ST_IDLE;
+                        state <= ST_PREPARATION;
                         flag_control_int <= 0;
                     end
                 endcase
@@ -558,7 +541,7 @@ always_ff @(posedge clk) begin
                     wr <= 0;
                     work <= 1;
                     op <= 0;
-                    state <= ST_IDLE;
+                    state <= ST_PREPARATION;
                     flag_go_int_cap <= 1;
                     len <= 32;
                 end 
@@ -580,7 +563,7 @@ always_ff @(posedge clk) begin
             end
             //////////////////////////////////////////////////
             ST_CAPTURE_INT : begin  
-                        state <= ST_IDLE;
+                        state <= ST_PREPARATION;
                         flag_control_int <= 1;
                         flag_go_int_cap <= 0;
                         rd <= 1;
@@ -592,7 +575,7 @@ always_ff @(posedge clk) begin
                     wr <= 0;
                     work <= 1;
                     op <= 1;
-                    state <= ST_IDLE;
+                    state <= ST_PREPARATION;
                     len <= 32;
                     flag_go_recv <= 0;
                 end 
@@ -623,7 +606,7 @@ always_ff @(posedge clk) begin
                     wr <= 0;
                     work <= 1;
                     op <= 1;
-                    state <= ST_IDLE;
+                    state <= ST_PREPARATION;
                     len <= 40;
                     flag_go_recv <= 1;
                     flag_go_rd_wr <= 0;
@@ -657,7 +640,7 @@ always_ff @(posedge clk) begin
             //////////////////////////////////////////////////
             ST_CAPTURE_MEM : begin  
                 if (index == read_sn_rx_rsr) begin
-                    state <= ST_IDLE;
+                    state <= ST_PREPARATION;
                     flag_go_mem_cap <= 0;
                     flag_go_rd_wr <= 1;
                     rd <= 0;
@@ -678,7 +661,7 @@ always_ff @(posedge clk) begin
                     wr <= 0;
                     work <= 1;
                     op <= 0;
-                    state <= ST_IDLE;
+                    state <= ST_PREPARATION;
                     flag_go_mem_cap <= 1;
                     flag_go_read <= 0;
                     len <= 24 + (read_sn_rx_rsr * 8);
@@ -703,7 +686,7 @@ always_ff @(posedge clk) begin
             //////////////////////////////////////////////////
             ST_CAPTURE_RD : begin  
                 if (index == 2) begin
-                    state <= ST_IDLE;
+                    state <= ST_PREPARATION;
                     flag_go_rd_cap <= 0;
                     flag_go_read <= 1;
                     rd <= 0;
@@ -726,7 +709,7 @@ always_ff @(posedge clk) begin
                     wr <= 0;
                     work <= 1;
                     op <= 0;
-                    state <= ST_IDLE;
+                    state <= ST_PREPARATION;
                     flag_go_rd_cap <= 1;
                     flag_go_rd_rd <= 0;
                     len <= 40;
@@ -751,7 +734,7 @@ always_ff @(posedge clk) begin
             //////////////////////////////////////////////////
             ST_CAPTURE_RSR : begin  
                 if (index == 2) begin
-                    state <= ST_IDLE;
+                    state <= ST_PREPARATION;
                     flag_go_rsr_cap <= 0;
                     flag_go_rd_rd <= 1;
                     rd <= 0;
@@ -774,7 +757,7 @@ always_ff @(posedge clk) begin
                     wr <= 0;
                     work <= 1;
                     op <= 0;
-                    state <= ST_IDLE;
+                    state <= ST_PREPARATION;
                     flag_go_rsr_cap <= 1;
                     flag_go_rsr_rd <= 0;
                     len <= 40;
@@ -805,7 +788,7 @@ always_ff @(posedge clk) begin
                                 wr <= 0;
                                 work <= 1;
                                 op <= 1;
-                                state <= ST_IDLE;
+                                state <= ST_PREPARATION;
                                 len <= 40;
                                 initial_index <= initial_index - 1;
                             end 
@@ -840,7 +823,7 @@ always_ff @(posedge clk) begin
                                 wr <= 0;
                                 work <= 1;
                                 op <= 1;
-                                state <= ST_IDLE;
+                                state <= ST_PREPARATION;
                                 len <= 32;
                                 initial_index <= initial_index - 1;
                             end 
@@ -870,7 +853,7 @@ always_ff @(posedge clk) begin
                                 wr <= 0;
                                 work <= 1;
                                 op <= 1;
-                                state <= ST_IDLE;
+                                state <= ST_PREPARATION;
                                 len <= 32;
                                 initial_index <= initial_index - 1;
                             end 
@@ -900,7 +883,7 @@ always_ff @(posedge clk) begin
                                 wr <= 0;
                                 work <= 1;
                                 op <= 1;
-                                state <= ST_IDLE;
+                                state <= ST_PREPARATION;
                                 len <= 56;
                                 initial_index <= initial_index - 1;
                             end 
@@ -945,7 +928,7 @@ always_ff @(posedge clk) begin
                                 wr <= 0;
                                 work <= 1;
                                 op <= 1;
-                                state <= ST_IDLE;
+                                state <= ST_PREPARATION;
                                 len <= 72;
                                 initial_index <= initial_index - 1;
                             end 
@@ -1000,7 +983,7 @@ always_ff @(posedge clk) begin
                                 wr <= 0;
                                 work <= 1;
                                 op <= 1;
-                                state <= ST_IDLE;
+                                state <= ST_PREPARATION;
                                 len <= 56;
                                 initial_index <= initial_index - 1;
                             end 
@@ -1045,7 +1028,7 @@ always_ff @(posedge clk) begin
                                 wr <= 0;
                                 work <= 1;
                                 op <= 1;
-                                state <= ST_IDLE;
+                                state <= ST_PREPARATION;
                                 len <= 56;
                                 initial_index <= initial_index - 1;
                             end 
@@ -1090,7 +1073,7 @@ always_ff @(posedge clk) begin
                                 wr <= 0;
                                 work <= 1;
                                 op <= 1;
-                                state <= ST_IDLE;
+                                state <= ST_PREPARATION;
                                 len <= 32;
                                 initial_index <= initial_index - 1;
                             end 
@@ -1120,7 +1103,7 @@ always_ff @(posedge clk) begin
                                 wr <= 0;
                                 work <= 1;
                                 op <= 1;
-                                state <= ST_IDLE;
+                                state <= ST_PREPARATION;
                                 len <= 32;
                                 initial_index <= initial_index - 1;
                             end 
@@ -1146,13 +1129,13 @@ always_ff @(posedge clk) begin
                             end
                         end
                     default : begin
-                        state <= ST_IDLE;
+                        state <= ST_PREPARATION;
                     end
                 endcase
             end
             //////////////////////////////////////////////////
             default : begin 
-                state <= ST_IDLE;
+                state <= ST_PREPARATION;
             end
          endcase
     end
