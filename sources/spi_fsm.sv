@@ -410,7 +410,7 @@ always_ff @(posedge clk) begin
                             state <= ST_PREPARATION;
                             len <= 32;
                             flag_control_int <= 0;
-                            read_sock <= 8'hff;
+                            //read_sock <= 8'hff;
                             flag_control <= 0;
                         end 
                         else if (index == 3) begin
@@ -442,7 +442,7 @@ always_ff @(posedge clk) begin
                             state <= ST_PREPARATION;
                             len <= 32;
                             flag_control_int <= 0;
-                            read_sock <= 8'hff;
+                            //read_sock <= 8'hff;
                             flag_control <= 0;
                         end 
                         else if (index == 3) begin
@@ -505,7 +505,7 @@ always_ff @(posedge clk) begin
                             state <= ST_PREPARATION;
                             len <= 32;
                             flag_control_int <= 0;
-                            read_sock <= 8'hff;
+                            //read_sock <= 8'hff;
                             flag_control <= 0;
                         end 
                         else if (index == 3) begin
@@ -694,12 +694,12 @@ always_ff @(posedge clk) begin
                 end
                 else if (index == 1) begin
                     rd <= 1;
-                    read_sn_rx_rd [15:8] <= rdata;
+                    read_sn_rx_rd [7:0] <= rdata;
                     index <= index + 1;
                 end
                 else if (index == 0) begin
                     rd <= 1;
-                    read_sn_rx_rd [7:0] <= rdata;
+                    read_sn_rx_rd [15:8] <= rdata;
                     index <= index + 1;
                 end
             end
@@ -742,12 +742,12 @@ always_ff @(posedge clk) begin
                 end
                 else if (index == 1) begin
                     rd <= 1;
-                    read_sn_rx_rsr [15:8] <= rdata;
+                    read_sn_rx_rsr [7:0] <= rdata;
                     index <= index + 1;
                 end
                 else if (index == 0) begin
                     rd <= 1;
-                    read_sn_rx_rsr [7:0] <= rdata;
+                    read_sn_rx_rsr [15:8] <= rdata;
                     index <= index + 1;
                 end
             end
