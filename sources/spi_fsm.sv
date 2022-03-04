@@ -123,8 +123,7 @@ ST_SEND_RECV, ST_RUNNING_R, ST_CAPTURE_MEM
 
 state_type state;
 //сигналы разрешения
-logic permission;
-logic flag;
+logic permission = 0;
 //флаги выбора чтения или записи 
 logic flag_control_int;
 logic flag_control;
@@ -154,25 +153,11 @@ logic [15:0] read_sn_rx_rd;
 ////////////////////////////////////////////////// 
 
 //permission block
-/*always_ff @(posedge clk) begin
+always_ff @(posedge clk) begin
     if(rst) begin
-        permission <= 0;
-        flag <= 0;
-    end 
-    else if ((busy == 1) && (flag == 1)) begin
-        permission <= 0;
-        flag <= 0;
-    end 
-    else if ((busy == 0) && (flag == 0)) begin
         permission <= 1;
-        flag <= 1;
     end
-    //сделать еще иф для капчеров потому что ломается разрешение
-    else if ((state != ST_IDLE) && (state != ST_PREPARATION)) begin
-        flag <= 1;
-        permission <= 0;
-    end
-end*/
+end
 
 
 //state machine
@@ -212,7 +197,9 @@ always_ff @(posedge clk) begin
                 wr <= 0;
                 rd <= 0;
                 index <=0;
-                state <= ST_IDLE;
+                if (permission == 1) begin
+                    state <= ST_IDLE;
+                end
             end
             //////////////////////////////////////////////////
             ST_IDLE : begin
@@ -410,7 +397,7 @@ always_ff @(posedge clk) begin
                             state <= ST_PREPARATION;
                             len <= 32;
                             flag_control_int <= 0;
-                            //read_sock <= 8'hff;
+                            read_sock <= 8'hff;
                             flag_control <= 0;
                         end 
                         else if (index == 3) begin
@@ -442,7 +429,7 @@ always_ff @(posedge clk) begin
                             state <= ST_PREPARATION;
                             len <= 32;
                             flag_control_int <= 0;
-                            //read_sock <= 8'hff;
+                            read_sock <= 8'hff;
                             flag_control <= 0;
                         end 
                         else if (index == 3) begin
@@ -505,7 +492,7 @@ always_ff @(posedge clk) begin
                             state <= ST_PREPARATION;
                             len <= 32;
                             flag_control_int <= 0;
-                            //read_sock <= 8'hff;
+                            read_sock <= 8'hff;
                             flag_control <= 0;
                         end 
                         else if (index == 3) begin
@@ -645,7 +632,6 @@ always_ff @(posedge clk) begin
                     flag_go_rd_wr <= 1;
                     rd <= 0;
                     wr3 <= 0;
-                    index <= 0;
                     read_sn_rx_rd <= read_sn_rx_rsr + read_sn_rx_rd;
                 end
                 else if (index < read_sn_rx_rsr) begin
@@ -665,7 +651,6 @@ always_ff @(posedge clk) begin
                     flag_go_mem_cap <= 1;
                     flag_go_read <= 0;
                     len <= 24 + (read_sn_rx_rsr * 8);
-                    index <= 0;
                 end 
                 else if (index == 2) begin
                     wr <= 1;
@@ -690,7 +675,6 @@ always_ff @(posedge clk) begin
                     flag_go_rd_cap <= 0;
                     flag_go_read <= 1;
                     rd <= 0;
-                    index <= 0;
                 end
                 else if (index == 1) begin
                     rd <= 1;
@@ -713,7 +697,6 @@ always_ff @(posedge clk) begin
                     flag_go_rd_cap <= 1;
                     flag_go_rd_rd <= 0;
                     len <= 40;
-                    index <= 0;
                 end 
                 else if (index == 2) begin
                     wr <= 1;
@@ -738,7 +721,6 @@ always_ff @(posedge clk) begin
                     flag_go_rsr_cap <= 0;
                     flag_go_rd_rd <= 1;
                     rd <= 0;
-                    index <= 0;
                 end
                 else if (index == 1) begin
                     rd <= 1;
@@ -761,8 +743,6 @@ always_ff @(posedge clk) begin
                     flag_go_rsr_cap <= 1;
                     flag_go_rsr_rd <= 0;
                     len <= 40;
-                    index <= 0;
-                    flag_go_rsr_rd <= 0;
                 end 
                 else if (index == 2) begin
                     wr <= 1;
