@@ -192,6 +192,7 @@ always_ff @(posedge clk) begin
         case (state)
             //////////////////////////////////////////////////
             ST_PREPARATION : begin
+                wr3 <= 0;
                 work <= 0;
                 op <= 0;
                 wr <= 0;
@@ -634,6 +635,16 @@ always_ff @(posedge clk) begin
                     wr3 <= 0;
                     read_sn_rx_rd <= read_sn_rx_rsr + read_sn_rx_rd;
                 end
+                else if (index == 0) begin
+                    rd <= 1;
+                    index <= index + 1;
+                end
+                else if (index == (read_sn_rx_rsr - 1)) begin
+                    rd <= 0;
+                    wr3 <= 1;
+                    wdata3 <= rdata;
+                    index <= index + 1;
+                end
                 else if (index < read_sn_rx_rsr) begin
                     rd <= 1;
                     wr3 <= 1;
@@ -670,20 +681,23 @@ always_ff @(posedge clk) begin
             end
             //////////////////////////////////////////////////
             ST_CAPTURE_RD : begin  
-                if (index == 2) begin
+                if (index == 3) begin
                     state <= ST_PREPARATION;
                     flag_go_rd_cap <= 0;
                     flag_go_read <= 1;
+                end
+                else if (index == 2) begin
                     rd <= 0;
+                    read_sn_rx_rd [7:0] <= rdata;
+                    index <= index + 1;
                 end
                 else if (index == 1) begin
                     rd <= 1;
-                    read_sn_rx_rd [7:0] <= rdata;
+                    read_sn_rx_rd [15:8] <= rdata;
                     index <= index + 1;
                 end
                 else if (index == 0) begin
                     rd <= 1;
-                    read_sn_rx_rd [15:8] <= rdata;
                     index <= index + 1;
                 end
             end
@@ -716,20 +730,23 @@ always_ff @(posedge clk) begin
             end
             //////////////////////////////////////////////////
             ST_CAPTURE_RSR : begin  
-                if (index == 2) begin
+                if (index == 3) begin
                     state <= ST_PREPARATION;
                     flag_go_rsr_cap <= 0;
                     flag_go_rd_rd <= 1;
+                end
+                else if (index == 2) begin
                     rd <= 0;
+                    read_sn_rx_rsr [7:0] <= rdata;
+                    index <= index + 1;
                 end
                 else if (index == 1) begin
                     rd <= 1;
-                    read_sn_rx_rsr [7:0] <= rdata;
+                    read_sn_rx_rsr [15:8] <= rdata;
                     index <= index + 1;
                 end
                 else if (index == 0) begin
                     rd <= 1;
-                    read_sn_rx_rsr [15:8] <= rdata;
                     index <= index + 1;
                 end
             end
