@@ -49,6 +49,7 @@ typedef enum logic [2:0] {ST_IDLE, ST_RUNNING_R, ST_RUNNING_WR, ST_DISPATCH, ST_
 //Local params
 //////////////////////////////////////////////////
 
+// поддерживаются делители 1 и 2
 localparam FREQUENCY_DIVIDER = 1;
 localparam DELAY_SCSN = FREQUENCY_DIVIDER * 4;
 
@@ -68,13 +69,13 @@ logic countenable;
 ////////////////////////////////////////////////// 
 
 //////////////////////////////////////////////////
-//counter scsn
+//counter
 //////////////////////////////////////////////////
 always_ff @(posedge clk) begin
     if (rst) begin
             count <= 0;
         end
-    else if ((FREQUENCY_DIVIDER * len + 2 * DELAY_SCSN) == count) begin
+    else if ((FREQUENCY_DIVIDER * 2 * len + 2 * DELAY_SCSN) == count) begin
             count <= 0;
         end
     else if (countenable == 1) begin
@@ -95,7 +96,7 @@ always_ff @(posedge clk) begin
     else if (len == counttransaction) begin
             counttransaction <= 0;
         end
-    else if ((countenable == 1) && (((DELAY_SCSN + FREQUENCY_DIVIDER * counttransaction) - count) == 1))  begin
+    else if ((countenable == 1) && (((DELAY_SCSN + FREQUENCY_DIVIDER * 2 * counttransaction) - count) == 1))  begin
             counttransaction <= counttransaction + 1;
         end
 end
@@ -149,18 +150,18 @@ always_ff @(posedge clk) begin
             end
             //////////////////////////////////////////////////
             ST_RUNNING_WR : begin 
-                if ((FREQUENCY_DIVIDER * len + 2 * DELAY_SCSN) == count) begin
+                if ((FREQUENCY_DIVIDER * 2 * len + 2 * DELAY_SCSN) == count) begin
                     wr <= 0;
                     rd <= 0; 
                     state <= ST_IDLE;
                     busy <= 0;
                     countenable <= 0;
                 end
-                else if (count == (DELAY_SCSN - FREQUENCY_DIVIDER)) begin
+                else if (count == (DELAY_SCSN - FREQUENCY_DIVIDER * 2)) begin
                     shiftregister [(DATA - 1):0] <= rdata [(DATA-1):0];
                     rd <= 1;
                 end
-                else if ((count > (DELAY_SCSN - 1)) && (count < (FREQUENCY_DIVIDER * len + DELAY_SCSN)) && (count == ((counttransaction - 1) * FREQUENCY_DIVIDER + DELAY_SCSN))) begin 
+                else if ((count > (DELAY_SCSN - 1)) && (count < (FREQUENCY_DIVIDER * 2 * len + DELAY_SCSN)) && (count == ((counttransaction - 1) * FREQUENCY_DIVIDER * 2 + DELAY_SCSN))) begin 
                         if (counttransaction == len) begin
                             shiftregister <= {nextshiftregister [(DATA-2):0],1'b0};
                             rd <= 0;
@@ -181,18 +182,18 @@ always_ff @(posedge clk) begin
             end
             //////////////////////////////////////////////////
             ST_RUNNING_R : begin  
-                if ((FREQUENCY_DIVIDER * len + 2 * DELAY_SCSN) == count) begin 
+                if ((FREQUENCY_DIVIDER * 2 * len + 2 * DELAY_SCSN) == count) begin 
                     wr <= 0;
                     rd <= 0;
                     state <= ST_IDLE;
                     busy <= 0;
                     countenable <= 0;
                 end
-                else if (count == (DELAY_SCSN - FREQUENCY_DIVIDER)) begin
+                else if (count == (DELAY_SCSN - FREQUENCY_DIVIDER * 2)) begin
                     shiftregister [(DATA - 1):0] <= rdata [(DATA-1):0];
                     rd <= 1;
                 end
-                else if ((count > (DELAY_SCSN - 1)) && (count < (FREQUENCY_DIVIDER * len + DELAY_SCSN)) && (count == ((counttransaction - 1) * FREQUENCY_DIVIDER + DELAY_SCSN))) begin 
+                else if ((count > (DELAY_SCSN - 1)) && (count < (FREQUENCY_DIVIDER * 2 * len + DELAY_SCSN)) && (count == ((counttransaction - 1) * FREQUENCY_DIVIDER * 2 + DELAY_SCSN))) begin 
                     if (counttransaction < 25) begin
                             if (counttransaction == 24) begin
                                 shiftregister <= {nextshiftregister [(DATA-2):0],1'b0};
@@ -229,10 +230,8 @@ always_ff @(posedge clk) begin
             end
             //////////////////////////////////////////////////
             ST_SAMPLING : begin  
-                //shiftregister [(DATA - 1):0] <= rdata [(DATA-1):0];
                 state <= ST_RUNNING_WR;
                 countenable <= 1;
-                //rd <= 1;
             end
             //////////////////////////////////////////////////
             default : begin 
@@ -265,14 +264,15 @@ end
 //sclk impulse generation logic
 //////////////////////////////////////////////////
 
-always_ff @(negedge clk) begin
+always_ff @(posedge clk) begin
     if(rst) begin
         sclk <= 0;
     end 
 	 else if (count == DELAY_SCSN) begin
                 sclk <= 1;
         end
-        else if ((count > (DELAY_SCSN)) && (count < (FREQUENCY_DIVIDER * len + DELAY_SCSN) && (!(count[1])))) begin
+        //При измении частоты нужно обязательно менять count[0] чтобы подстроить нужный разряд счетчика под делитель.
+        else if ((count[FREQUENCY_DIVIDER - 1] == 0) && (count > (DELAY_SCSN)) && (count < (FREQUENCY_DIVIDER * 2 * len + DELAY_SCSN))) begin
                 sclk <= 1;
         end 
         else begin 

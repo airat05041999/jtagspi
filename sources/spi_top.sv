@@ -20,7 +20,7 @@ module spi_top
     input logic clknotpll,
     //INPUT_CONTROL
     //input logic interrupt, 
-	 input logic interrupt,
+     input logic interrupt,
     //INPUT_SPI
     input logic miso,
     //OUTPUT_SPI
@@ -79,7 +79,7 @@ logic busy;
 //////////////////////////////////////////////////
 //reset counter for debugging
 //////////////////////////////////////////////////
-/*always_ff @(posedge clk) begin
+always_ff @(posedge clk) begin
     if (countrst == 0) begin
         rst <= 0;
         countrst <= countrst + 1;
@@ -113,12 +113,12 @@ always_ff @(posedge clk) begin
         countwrst <= 250500002;
         wrst <= 1;
     end
-end*/
+end
 
 //////////////////////////////////////////////////
 //reset counter for modeling
 //////////////////////////////////////////////////
-always_ff @(posedge clk) begin
+/*always_ff @(posedge clk) begin
     if (countrst == 0) begin
         rst <= 0;
         countrst <= countrst + 1;
@@ -152,7 +152,7 @@ always_ff @(posedge clk) begin
         countwrst <= 31;
         wrst <= 1;
     end
-end
+end*/
 
 //////////////////////////////////////////////////
 //buffer fifo
@@ -177,13 +177,13 @@ fifo #(.FIFO_DEPTH(FIFO_DEPTH), .DATA_WIDTH(DATA))
         .usedw(usedw2)
     );
 
-/*fifo #(.FIFO_DEPTH(FIFO_DEPTH), .DATA_WIDTH(DATA))
+fifo #(.FIFO_DEPTH(FIFO_DEPTH), .DATA_WIDTH(DATA))
     fifo_inst3 (
         .clk(clk), .rst(rst),
         .wdata(wdata3), .wr(wr3), .full(full3),
         .rdata(), .rd(), .empty(),
         .usedw()
-    );*/
+    );
 
 spi_interface #(.DATA(DATA))
     spi_insterface_inst (
@@ -202,6 +202,7 @@ spi_interface #(.DATA(DATA))
         .len(len), .work(work), .op(op), .busy(busy),
         .wdata3(wdata3), .wr3(wr3), .full3(full3), .interrupt(interrupt)
     );*/
+
 spi_fsm_for_tests #(.DATA(DATA))
     spi_fsm_inst (
         .clk(clk), .rst(rst),
