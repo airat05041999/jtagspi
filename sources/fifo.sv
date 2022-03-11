@@ -12,7 +12,7 @@ module fifo
 
 #(
     parameter DATA_WIDTH = 8,
-    parameter FIFO_DEPTH = 128
+    parameter FIFO_DEPTH = 32
 )
 
 (

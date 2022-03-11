@@ -152,14 +152,6 @@ logic [15:0] read_sn_rx_rd;
 //Architecture
 ////////////////////////////////////////////////// 
 
-//permission block
-always_ff @(posedge clk) begin
-    if(rst) begin
-        permission <= 1;
-    end
-end
-
-
 //state machine
 always_ff @(posedge clk) begin
     if (rst) begin
@@ -187,6 +179,7 @@ always_ff @(posedge clk) begin
         read_int <= 0;
         read_sn_rx_rsr <= 0;
         read_sn_rx_rd <= 0;
+        permission <= 1;
     end 
     else begin
         case (state)
@@ -627,7 +620,7 @@ always_ff @(posedge clk) begin
             end
             //////////////////////////////////////////////////
             ST_CAPTURE_MEM : begin  
-                if (index == read_sn_rx_rsr) begin
+                if (index == (read_sn_rx_rsr + 1)) begin
                     state <= ST_PREPARATION;
                     flag_go_mem_cap <= 0;
                     flag_go_rd_wr <= 1;
@@ -639,7 +632,7 @@ always_ff @(posedge clk) begin
                     rd <= 1;
                     index <= index + 1;
                 end
-                else if (index == (read_sn_rx_rsr - 1)) begin
+                else if (index == read_sn_rx_rsr) begin
                     rd <= 0;
                     wr3 <= 1;
                     wdata3 <= rdata;

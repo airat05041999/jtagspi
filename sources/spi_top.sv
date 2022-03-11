@@ -11,7 +11,7 @@
 module spi_top
     #(
     parameter DATA = 8,
-    parameter FIFO_DEPTH = 8
+    parameter FIFO_DEPTH = 16
     )
 
     (
@@ -177,13 +177,19 @@ fifo #(.FIFO_DEPTH(FIFO_DEPTH), .DATA_WIDTH(DATA))
         .usedw(usedw2)
     );
 
-fifo #(.FIFO_DEPTH(FIFO_DEPTH), .DATA_WIDTH(DATA))
+fifo #(.FIFO_DEPTH(16), .DATA_WIDTH(DATA))
     fifo_inst3 (
         .clk(clk), .rst(rst),
         .wdata(wdata3), .wr(wr3), .full(full3),
-        .rdata(), .rd(), .empty(),
-        .usedw()
+        .rdata(rdata3), .rd(rd3), .empty(),
+        .usedw(usedw3)
     );
+
+spi_check_module #(.DATA(DATA))
+spi_check_module_inst (
+    .clk(clk), .rst(rst),
+    .rdata(rdata3), .rd(rd3), .usedw(usedw3)
+);
 
 spi_interface #(.DATA(DATA))
     spi_insterface_inst (
@@ -194,22 +200,22 @@ spi_interface #(.DATA(DATA))
         .mosi(mosi), .miso(miso), .scsn(scsn), .sclk(sclk)
     );
 
-/*spi_fsm #(.DATA(DATA))
+spi_fsm #(.DATA(DATA))
     spi_fsm_inst (
         .clk(clk), .rst(rst),
         .wdata(wdata1), .wr(wr1), .full(full1),
         .rdata(rdata1), .rd(rd1), .empty(empty1),
         .len(len), .work(work), .op(op), .busy(busy),
         .wdata3(wdata3), .wr3(wr3), .full3(full3), .interrupt(interrupt)
-    );*/
+    );
 
-spi_fsm_for_tests #(.DATA(DATA))
+/*spi_fsm_for_tests #(.DATA(DATA))
     spi_fsm_inst (
         .clk(clk), .rst(rst),
         .wdata(wdata1), .wr(wr1), .full(full1),
         .rdata(rdata1), .rd(rd1), .empty(empty1),
         .len(len), .work(work), .op(op), .busy(busy)
-    );
+    );*/
 
 pll pll_inst (
         .refclk(clknotpll), .rst(0),
