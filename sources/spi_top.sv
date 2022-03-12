@@ -28,7 +28,8 @@ module spi_top
     output logic mosi,
     //system w5500
     output logic sclk,
-    output logic wrst
+    output logic wrst,
+    output logic check
     );
 
 
@@ -49,7 +50,7 @@ logic wr1;
 logic rd1;
 logic full1;
 logic empty1;
-logic usedw1;
+logic [($clog2(FIFO_DEPTH) - 1):0] usedw1;
 
 
 //fifo 2 signals
@@ -59,7 +60,7 @@ logic wr2;
 logic rd2;
 logic full2;
 logic empty2;
-logic usedw2;
+logic [($clog2(FIFO_DEPTH) - 1):0] usedw2;
 
 //fifo 3 signals
 logic [(DATA-1):0] wdata3;
@@ -68,7 +69,7 @@ logic wr3;
 logic rd3;
 logic full3;
 logic empty3;
-logic usedw3;
+logic [($clog2(FIFO_DEPTH) - 1):0] usedw3;
 
 //control signals
 logic [15:0] len;
@@ -177,7 +178,7 @@ fifo #(.FIFO_DEPTH(FIFO_DEPTH), .DATA_WIDTH(DATA))
         .usedw(usedw2)
     );
 
-fifo #(.FIFO_DEPTH(16), .DATA_WIDTH(DATA))
+fifo #(.FIFO_DEPTH(FIFO_DEPTH), .DATA_WIDTH(DATA))
     fifo_inst3 (
         .clk(clk), .rst(rst),
         .wdata(wdata3), .wr(wr3), .full(full3),
@@ -185,11 +186,11 @@ fifo #(.FIFO_DEPTH(16), .DATA_WIDTH(DATA))
         .usedw(usedw3)
     );
 
-spi_check_module #(.DATA(DATA))
-spi_check_module_inst (
-    .clk(clk), .rst(rst),
-    .rdata(rdata3), .rd(rd3), .usedw(usedw3)
-);
+spi_check_module #(.FIFO_DEPTH(FIFO_DEPTH), .DATA(DATA))
+    spi_check_module_inst (
+        .clk(clk), .rst(rst), .check(check),
+        .rdata(rdata3), .rd(rd3), .usedw(usedw3)
+        );
 
 spi_interface #(.DATA(DATA))
     spi_insterface_inst (
@@ -200,12 +201,12 @@ spi_interface #(.DATA(DATA))
         .mosi(mosi), .miso(miso), .scsn(scsn), .sclk(sclk)
     );
 
-spi_fsm #(.DATA(DATA))
+spi_fsm #(.FIFO_DEPTH(FIFO_DEPTH), .DATA(DATA))
     spi_fsm_inst (
         .clk(clk), .rst(rst),
         .wdata(wdata1), .wr(wr1), .full(full1),
-        .rdata(rdata1), .rd(rd1), .empty(empty1),
-        .len(len), .work(work), .op(op), .busy(busy),
+        .rdata(rdata1), .rd(rd1), .empty(empty1), .usedw(usedw1),
+        .len(len), .work(work), .op(op), .busy(busy), 
         .wdata3(wdata3), .wr3(wr3), .full3(full3), .interrupt(interrupt)
     );
 

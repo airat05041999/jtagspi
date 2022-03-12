@@ -10,7 +10,8 @@
 
 module spi_fsm
     #(
-    parameter DATA = 8
+    parameter DATA = 8,
+    parameter FIFO_DEPTH = 16
     )
 
     (
@@ -32,6 +33,7 @@ module spi_fsm
     input logic  [(DATA-1):0] rdata,
     output logic rd,
     input logic empty,
+    input logic [($clog2(FIFO_DEPTH) - 1):0] usedw,
     //OUTPUT_FIFO3
     output logic [(DATA-1):0] wdata3,
     output logic wr3,
@@ -243,7 +245,7 @@ always_ff @(posedge clk) begin
                 else if ((flag_go_rd_wr == 1) && (busy == 0)) begin
                     state <= ST_RUNNING_WR_RD;
                 end
-                else if ((flag_go_read == 1) && (busy == 0)) begin
+                else if ((flag_go_read == 1)) begin
                     state <= ST_RUNNING_R;
                 end
             end
@@ -628,17 +630,17 @@ always_ff @(posedge clk) begin
                     wr3 <= 0;
                     read_sn_rx_rd <= read_sn_rx_rsr + read_sn_rx_rd;
                 end
-                else if (index == 0) begin
+                else if ((index == 0) && (usedw > 0)) begin
                     rd <= 1;
                     index <= index + 1;
                 end
-                else if (index == read_sn_rx_rsr) begin
+                else if ((index == read_sn_rx_rsr) && (usedw > 0)) begin
                     rd <= 0;
                     wr3 <= 1;
                     wdata3 <= rdata;
                     index <= index + 1;
                 end
-                else if (index < read_sn_rx_rsr) begin
+                else if ((index < read_sn_rx_rsr) && (usedw > 0)) begin
                     rd <= 1;
                     wr3 <= 1;
                     wdata3 <= rdata;
