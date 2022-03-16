@@ -271,7 +271,6 @@ always_ff @(posedge clk) begin
 	 else if (count == DELAY_SCSN) begin
                 sclk <= 1;
         end
-        //При измении частоты нужно обязательно менять count[0] чтобы подстроить нужный разряд счетчика под делитель.
         else if ((count[FREQUENCY_DIVIDER - 1] == 0) && (count > (DELAY_SCSN)) && (count < (FREQUENCY_DIVIDER * 2 * len + DELAY_SCSN))) begin
                 sclk <= 1;
         end 

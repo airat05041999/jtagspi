@@ -31,11 +31,12 @@ int main(void)
     }
     int socket_desc;
     struct sockaddr_in server_addr {};;
-    char client_message[2000];
+    char server_message[100] , client_message[181] = "123456789123456789123456789123456789123456789123456789123456789123456789123456789123456789123456789123456789123456789123456789123456789123456789123456789123456789123456789123456789";
 
 
     // Очистить буфер:
-    memset(client_message, '\0', sizeof(client_message));
+    //memset(server_message, '\0', sizeof(server_message));
+    //memset(client_message, '\0', sizeof(client_message));
 
     // Создаем сокет:
     socket_desc = socket(AF_INET, SOCK_STREAM, 0);
@@ -60,9 +61,9 @@ int main(void)
     }
     printf("Connected with server successfully\n");
 
-    // Получаем ввод от пользователя:
-    printf("Enter message: ");
-    gets_s(client_message);
+    //printf("Enter message: ");
+    //gets_s(client_message);
+
 
     // Отправляем сообщение на сервер:
     if (send(socket_desc, client_message, strlen(client_message), 0) < 0) {
@@ -70,10 +71,22 @@ int main(void)
         return -1;
     }
 
+    printf("Enter message: ");
+    gets_s(client_message);
 
-    // Закрыть сокет:
+
+    // Receive the server's response:
+    if (recv(socket_desc, server_message, sizeof(server_message), 0) < 0) {
+        printf("Error while receiving server's msg\n");
+        return -1;
+    }
+
+    printf("Server's response: %s\n", server_message);
+
+    // Close the socket:
     closesocket(socket_desc);
 
     return 0;
+
 }
 

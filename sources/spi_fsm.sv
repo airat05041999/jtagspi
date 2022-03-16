@@ -141,6 +141,8 @@ logic flag_go_rsr_rd;
 logic flag_go_rd_rd;
 logic flag_go_rd_wr;
 logic flag_go_read;
+//для для работы с памятью
+logic flag_mem;
 
 logic [15:0] index;
 logic [3:0] initial_index;
@@ -182,6 +184,7 @@ always_ff @(posedge clk) begin
         read_sn_rx_rsr <= 0;
         read_sn_rx_rd <= 0;
         permission <= 1;
+        flag_mem <= 0;
     end 
     else begin
         case (state)
@@ -227,9 +230,6 @@ always_ff @(posedge clk) begin
                 else if ((flag_go_recv == 1) && (busy == 0)) begin
                     state <= ST_SEND_RECV;
                 end
-                else if ((flag_go_mem_cap == 1) && (busy == 0)) begin
-                    state <= ST_CAPTURE_MEM;
-                end
                 else if ((flag_go_rsr_cap == 1) && (busy == 0)) begin
                     state <= ST_CAPTURE_RSR;
                 end
@@ -245,8 +245,11 @@ always_ff @(posedge clk) begin
                 else if ((flag_go_rd_wr == 1) && (busy == 0)) begin
                     state <= ST_RUNNING_WR_RD;
                 end
-                else if ((flag_go_read == 1)) begin
+                else if ((flag_go_read == 1) && (busy == 0)) begin
                     state <= ST_RUNNING_R;
+                end
+                else if ((flag_go_mem_cap == 1)) begin
+                    state <= ST_CAPTURE_MEM;
                 end
             end
             //////////////////////////////////////////////////
@@ -622,7 +625,7 @@ always_ff @(posedge clk) begin
             end
             //////////////////////////////////////////////////
             ST_CAPTURE_MEM : begin  
-                if (index == (read_sn_rx_rsr + 1)) begin
+                if (index == (read_sn_rx_rsr * 2)) begin
                     state <= ST_PREPARATION;
                     flag_go_mem_cap <= 0;
                     flag_go_rd_wr <= 1;
@@ -630,21 +633,21 @@ always_ff @(posedge clk) begin
                     wr3 <= 0;
                     read_sn_rx_rd <= read_sn_rx_rsr + read_sn_rx_rd;
                 end
-                else if ((index == 0) && (usedw > 0)) begin
+                else if ((index[0] == 0) && (usedw > 0) && (flag_mem == 0)) begin
                     rd <= 1;
                     index <= index + 1;
+                    flag_mem <= 1;
                 end
-                else if ((index == read_sn_rx_rsr) && (usedw > 0)) begin
+                else if ((index[0] == 1) && (usedw > 0) && (flag_mem == 1)) begin
                     rd <= 0;
                     wr3 <= 1;
                     wdata3 <= rdata;
                     index <= index + 1;
-                end
-                else if ((index < read_sn_rx_rsr) && (usedw > 0)) begin
-                    rd <= 1;
-                    wr3 <= 1;
-                    wdata3 <= rdata;
-                    index <= index + 1;
+                    flag_mem <= 0;
+                end 
+                else begin
+                    rd <= 0;
+                    wr3 <= 0;
                 end
             end
             //////////////////////////////////////////////////
