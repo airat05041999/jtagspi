@@ -30,14 +30,15 @@ module spi_fsm_for_tests
     //INPUT_FIFO
     input logic  [(DATA-1):0] rdata,
     output logic rd,
-    input logic empty
+    input logic empty,
+    output logic check
     );
 
 //////////////////////////////////////////////////
 //Local types
 //////////////////////////////////////////////////
 
-typedef enum logic [2:0] {ST_IDLE, ST_RUNNING_R, ST_RUNNING_WR} state_type;
+typedef enum logic [2:0] {ST_IDLE, ST_RUNNING_R, ST_RUNNING_WR, ST_CAPTURE_RD} state_type;
 
 //////////////////////////////////////////////////
 //local registers
@@ -85,6 +86,7 @@ always_ff @(posedge clk) begin
         work <=0;
         len <= 0;
         interrupt <= 3;
+        check <=0;
     end 
     else begin
         case (state)
@@ -96,21 +98,45 @@ always_ff @(posedge clk) begin
                 rd <= 0;
                 if (busy == 0) begin
                     if ((interrupt == 1) && (permission == 1)) begin
-                        state <= ST_RUNNING_R;
+                        state <= ST_CAPTURE_RD;
                         index <= 3;
-                        interrupt <= 0;
+                        interrupt <= 3;
                     end
                     else if ((interrupt == 2) && (permission == 1)) begin
-                        state <= ST_RUNNING_WR;
+                        state <= ST_RUNNING_R;
                         index <= 5;
                         interrupt <= 1;
                     end
                     else if ((interrupt == 3) && (permission == 1)) begin
-                        state <= ST_RUNNING_R;
+                        state <= ST_RUNNING_WR;
                         index <= 3;
                         interrupt <= 2;
                     end
                 end 
+            end
+            //////////////////////////////////////////////////
+            ST_CAPTURE_RD : begin  
+                if (index == 3) begin
+                    state <= ST_IDLE;
+                end
+                else if (index == 2) begin
+                    rd <= 0;
+                    if (!(rdata == 8'haa)) begin
+                        check <= 1;
+                    end
+                    index <= index + 1;
+                end
+                else if (index == 1) begin
+                    rd <= 1;
+                    if (!(rdata == 8'h0f)) begin
+                        check <= 1;
+                    end
+                    index <= index + 1;
+                end
+                else if (index == 0) begin
+                    rd <= 1;
+                    index <= index + 1;
+                end
             end
             //////////////////////////////////////////////////
             ST_RUNNING_WR : begin  
