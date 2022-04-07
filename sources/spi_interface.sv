@@ -50,7 +50,7 @@ typedef enum logic [2:0] {ST_IDLE, ST_RUNNING_R, ST_RUNNING_WR, ST_DISPATCH, ST_
 //////////////////////////////////////////////////
 
 // поддерживаются делители 1 и 2
-localparam FREQUENCY_DIVIDER = 2;
+localparam FREQUENCY_DIVIDER = 1;
 localparam DELAY_SCSN = FREQUENCY_DIVIDER * 4;
 
 //////////////////////////////////////////////////
