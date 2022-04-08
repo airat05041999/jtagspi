@@ -45,7 +45,7 @@ module spi_fsm
 //////////////////////////////////////////////////
 
 //initial constants
-localparam MR = 8'h80;
+localparam MR = 8'h00;
 localparam IMR = 8'h00;
 localparam GAR = 32'hc0a80101;
 localparam SUBR = 32'hffffff00;
@@ -68,11 +68,13 @@ localparam PHYCFGR_AF_RST6 = 8'hFA;
 //addr_registers
 localparam ADDR_MR = 16'h0000;
 localparam ADDR_IMR = 16'h0016;
+localparam ADDR_IR = 16'h0015;
+localparam ADDR_SIR = 16'h0017;
+localparam ADDR_SIMR = 16'h0018;
 localparam ADDR_GAR = 16'h0001;
 localparam ADDR_SUBR = 16'h0005;
 localparam ADDR_SHAR = 16'h0009;
 localparam ADDR_SIPR = 16'h000f;
-localparam ADDR_SIMR = 16'h0018;
 localparam ADDR_SN_MR = 16'h0000;
 localparam ADDR_SN_CR = 16'h0001;
 localparam ADDR_SN_SR = 16'h0003;
@@ -112,11 +114,13 @@ localparam BSB_RX_SOCKET_0_REG = 5'b00011;
 //Local types
 //////////////////////////////////////////////////
 
-typedef enum logic [4:0] {ST_IDLE, ST_PREPARATION, ST_RUNNING_WR_INITIAL, 
+typedef enum logic [5:0] {ST_IDLE, ST_PREPARATION, ST_RUNNING_WR_INITIAL, 
 ST_RUNNING_R_RSR, ST_RUNNING_WR_RD, ST_CAPTURE_RSR, ST_RUNNING_R_RD, ST_CAPTURE_RD,
 ST_RUNNING_R_CONTROL, ST_RUNNING_WR_CONTROL, ST_CAPTURE_CONTROL,
 ST_RUNNING_R_INT, ST_RUNNING_WR_INT, ST_CAPTURE_INT,
-ST_SEND_RECV, ST_RUNNING_R, ST_CAPTURE_MEM
+ST_SEND_RECV, ST_RUNNING_R, ST_CAPTURE_MEM,
+ST_RUNNING_R_IR,  ST_CAPTURE_IR,
+ST_RUNNING_R_SIR,  ST_CAPTURE_SIR
 } state_type;
 
 //////////////////////////////////////////////////
@@ -143,11 +147,20 @@ logic flag_go_rd_wr;
 logic flag_go_read;
 //для для работы с памятью
 logic flag_mem;
+//флаги для прерываний
+logic flag_read_int_ir_cap;
+logic flag_read_int_ir;
+logic flag_read_int_sir_cap;
+logic flag_read_int_sir;
 
 logic [15:0] index;
 logic [3:0] initial_index;
 logic [7:0] read_sock;
 logic [7:0] read_int;
+logic [7:0] read_int_ir;
+logic [7:0] read_int_imr;
+logic [7:0] read_int_sir;
+logic [7:0] read_int_simr;
 logic [7:0] read_phy;
 logic [15:0] read_sn_rx_rsr;
 logic [15:0] read_sn_rx_rd;
@@ -179,8 +192,16 @@ always_ff @(posedge clk) begin
         flag_go_rd_rd <= 0;
         flag_go_rd_wr <= 0;
         flag_go_read <= 0;
+        flag_read_int_ir <= 0;
+        flag_read_int_ir_cap <= 0;
+        flag_read_int_sir <= 0;
+        flag_read_int_sir_cap <= 0;
         read_sock <= 0;
-        read_int <= 0;
+        read_int <= 8'hff;
+        read_int_imr <= 8'hff;
+        read_int_ir <= 8'hff;
+        read_int_imr <= 8'hff;
+        read_int_simr <= 8'hff;
         read_sn_rx_rsr <= 0;
         read_sn_rx_rd <= 0;
         permission <= 1;
@@ -208,6 +229,21 @@ always_ff @(posedge clk) begin
                 else if ((flag_go_int_cap == 1) && (busy == 0)) begin
                     state <= ST_CAPTURE_INT;
                 end
+                else if ((flag_read_int_ir == 1) && (busy == 0)) begin
+                    state <= ST_RUNNING_R_IR;
+                end
+                else if ((flag_read_int_ir_cap == 1) && (busy == 0)) begin
+                    state <= ST_CAPTURE_IR;
+                end
+                else if ((flag_read_int_sir == 1) && (busy == 0)) begin
+                    state <= ST_RUNNING_R_SIR;
+                end
+                else if ((flag_read_int_sir_cap == 1) && (busy == 0)) begin
+                    state <= ST_CAPTURE_SIR;
+                end
+                else if ((interrupt == 0) && (busy == 0) && (read_int == 0)) begin
+                    state <= ST_RUNNING_R_IR;
+                end 
                 else if ((interrupt == 0) && (busy == 0)) begin
                     if (flag_control_int == 1) begin
                         state <= ST_RUNNING_WR_INT;
@@ -251,6 +287,73 @@ always_ff @(posedge clk) begin
                 else if ((flag_go_mem_cap == 1)) begin
                     state <= ST_CAPTURE_MEM;
                 end
+            end
+            //////////////////////////////////////////////////
+            ST_RUNNING_R_IR : begin  
+                if (index == 3) begin
+                    wr <= 0;
+                    work <= 1;
+                    op <= 0;
+                    state <= ST_PREPARATION;
+                    flag_read_int_ir_cap <= 1;
+                    len <= 32;
+                end 
+                else if (index == 2) begin
+                    wr <= 1;
+                    wdata <= {BSB_REGULAR_REG, 1'b0, 2'b0};
+                    index <= index + 1;
+                end    
+                else if (index == 1) begin
+                    wr <= 1;
+                    wdata <= ADDR_IR [7:0];
+                    index <= index + 1;
+                end 
+                else if (index == 0) begin
+                    wr <= 1;
+                    wdata <= ADDR_IR [15:8]; 
+                    index <= index + 1;
+                end
+            end
+            //////////////////////////////////////////////////
+            ST_CAPTURE_IR : begin  
+                        state <= ST_PREPARATION;
+                        flag_read_int_sir <= 1;
+                        flag_read_int_ir_cap <= 0;
+                        rd <= 1;
+                        read_int_ir <= rdata;
+            end
+            //////////////////////////////////////////////////
+            ST_RUNNING_R_SIR : begin  
+                if (index == 3) begin
+                    wr <= 0;
+                    work <= 1;
+                    op <= 0;
+                    state <= ST_PREPARATION;
+                    flag_read_int_sir <= 1;
+                    len <= 32;
+                end 
+                else if (index == 2) begin
+                    wr <= 1;
+                    wdata <= {BSB_REGULAR_REG, 1'b0, 2'b0};
+                    index <= index + 1;
+                end    
+                else if (index == 1) begin
+                    wr <= 1;
+                    wdata <= ADDR_SIR [7:0];
+                    index <= index + 1;
+                end 
+                else if (index == 0) begin
+                    wr <= 1;
+                    wdata <= ADDR_SIR [15:8]; 
+                    index <= index + 1;
+                end
+            end
+            //////////////////////////////////////////////////
+            ST_CAPTURE_SIR : begin  
+                        state <= ST_PREPARATION;
+                        flag_read_int_sir_cap <= 0;
+                        rd <= 1;
+                        read_int_sir <= rdata;
             end
             //////////////////////////////////////////////////
             ST_RUNNING_WR_CONTROL : begin  
@@ -1130,6 +1233,7 @@ always_ff @(posedge clk) begin
             end
             //////////////////////////////////////////////////
             default : begin 
+                read_int_simr <= read_int_ir + read_int_sir;
                 state <= ST_PREPARATION;
             end
          endcase
