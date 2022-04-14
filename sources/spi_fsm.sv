@@ -37,7 +37,10 @@ module spi_fsm
     //OUTPUT_FIFO3
     output logic [(DATA-1):0] wdata3,
     output logic wr3,
-    input logic full3
+    input logic full3,
+
+    output logic [7:0] read_int_ir,
+    output logic [7:0] read_int_sir
     );
 
 //////////////////////////////////////////////////
@@ -157,10 +160,6 @@ logic [15:0] index;
 logic [3:0] initial_index;
 logic [7:0] read_sock;
 logic [7:0] read_int;
-logic [7:0] read_int_ir;
-logic [7:0] read_int_imr;
-logic [7:0] read_int_sir;
-logic [7:0] read_int_simr;
 logic [7:0] read_phy;
 logic [15:0] read_sn_rx_rsr;
 logic [15:0] read_sn_rx_rd;
@@ -198,10 +197,8 @@ always_ff @(posedge clk) begin
         flag_read_int_sir_cap <= 0;
         read_sock <= 0;
         read_int <= 8'hff;
-        read_int_imr <= 8'hff;
-        read_int_ir <= 8'hff;
-        read_int_imr <= 8'hff;
-        read_int_simr <= 8'hff;
+        read_int_ir <= 8'h0f;
+        read_int_sir <= 8'h0f;
         read_sn_rx_rsr <= 0;
         read_sn_rx_rd <= 0;
         permission <= 1;
@@ -223,6 +220,12 @@ always_ff @(posedge clk) begin
             end
             //////////////////////////////////////////////////
             ST_IDLE : begin
+                wr3 <= 0;
+                work <= 0;
+                op <= 0;
+                wr <= 0;
+                rd <= 0;
+                index <=0;
                 if ((initial_index != 0) && (busy == 0)) begin
                     state <= ST_RUNNING_WR_INITIAL;
                 end
@@ -295,6 +298,7 @@ always_ff @(posedge clk) begin
                     work <= 1;
                     op <= 0;
                     state <= ST_PREPARATION;
+                    flag_read_int_ir <= 0;
                     flag_read_int_ir_cap <= 1;
                     len <= 32;
                 end 
@@ -305,12 +309,12 @@ always_ff @(posedge clk) begin
                 end    
                 else if (index == 1) begin
                     wr <= 1;
-                    wdata <= ADDR_IR [7:0];
+                    wdata <= ADDR_IMR [7:0];
                     index <= index + 1;
                 end 
                 else if (index == 0) begin
                     wr <= 1;
-                    wdata <= ADDR_IR [15:8]; 
+                    wdata <= ADDR_IMR [15:8]; 
                     index <= index + 1;
                 end
             end
@@ -329,7 +333,8 @@ always_ff @(posedge clk) begin
                     work <= 1;
                     op <= 0;
                     state <= ST_PREPARATION;
-                    flag_read_int_sir <= 1;
+                    flag_read_int_sir <= 0;
+                    flag_read_int_sir_cap <= 1;
                     len <= 32;
                 end 
                 else if (index == 2) begin
@@ -339,12 +344,12 @@ always_ff @(posedge clk) begin
                 end    
                 else if (index == 1) begin
                     wr <= 1;
-                    wdata <= ADDR_SIR [7:0];
+                    wdata <= ADDR_SIMR [7:0];
                     index <= index + 1;
                 end 
                 else if (index == 0) begin
                     wr <= 1;
-                    wdata <= ADDR_SIR [15:8]; 
+                    wdata <= ADDR_SIMR [15:8]; 
                     index <= index + 1;
                 end
             end
@@ -889,6 +894,7 @@ always_ff @(posedge clk) begin
                                 state <= ST_PREPARATION;
                                 len <= 40;
                                 initial_index <= initial_index - 1;
+                                flag_read_int_ir <= 1;
                             end 
                             else if (index == 4) begin
                                 wr <= 1;
@@ -1233,7 +1239,6 @@ always_ff @(posedge clk) begin
             end
             //////////////////////////////////////////////////
             default : begin 
-                read_int_simr <= read_int_ir + read_int_sir;
                 state <= ST_PREPARATION;
             end
          endcase

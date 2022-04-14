@@ -29,7 +29,8 @@ module spi_top
     //system w5500
     output logic sclk,
     output logic wrst,
-    output logic check
+    output logic check,
+    output logic [23:0] addrreg
     );
 
 
@@ -76,6 +77,10 @@ logic [15:0] len;
 logic op;
 logic work;
 logic busy;
+
+logic [23:0] shiftregister;
+logic [23:0] nextshiftregister;
+logic [7:0] count; 
 
 //////////////////////////////////////////////////
 //reset counter for debugging
@@ -154,6 +159,36 @@ always_ff @(posedge clk) begin
         wrst <= 1;
     end
 end*/
+
+always_ff @(posedge sclk or posedge scsn) begin
+    if(scsn) begin
+        addrreg <= 0;
+        shiftregister <= 0;
+        count <= 0; 
+    end else begin
+        if (count < 24) begin
+            shiftregister <= {nextshiftregister [22:0], mosi};
+            count <= count + 1;
+        end
+        else if (count == 24) begin
+            addrreg <= shiftregister;
+        end 
+    end
+end
+
+
+
+//////////////////////////////////////////////////
+//Shift register
+//////////////////////////////////////////////////
+always_ff @ (negedge sclk or posedge scsn) begin
+    if (scsn) begin
+        nextshiftregister <= 0;
+    end
+    else begin
+        nextshiftregister <= shiftregister;
+    end
+end
 
 //////////////////////////////////////////////////
 //buffer fifo
