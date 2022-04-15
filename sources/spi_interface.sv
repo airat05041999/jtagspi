@@ -10,7 +10,8 @@
 
 module spi_interface
     #(
-    parameter DATA = 8
+    parameter DATA = 8,
+    parameter FIFO_DEPTH = 16
     )
 
     (
@@ -31,6 +32,7 @@ module spi_interface
     input logic  [(DATA-1):0] rdata,
     output logic rd,
     input logic empty,
+    input logic [($clog2(FIFO_DEPTH) - 1):0] usedw,
     //INPUT_SPI
     input logic miso,
     //OUTPUT_SPI

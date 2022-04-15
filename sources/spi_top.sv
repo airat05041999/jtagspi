@@ -19,7 +19,6 @@ module spi_top
     //input logic rst,
     input logic clknotpll,
     //INPUT_CONTROL
-    //input logic interrupt, 
      input logic interrupt,
     //INPUT_SPI
     input logic miso,
@@ -227,11 +226,11 @@ spi_check_module #(.FIFO_DEPTH(FIFO_DEPTH), .DATA(DATA))
         .rdata(rdata3), .rd(rd3), .usedw(usedw3)
         );
 
-spi_interface #(.DATA(DATA))
+spi_interface #(.FIFO_DEPTH(FIFO_DEPTH), .DATA(DATA))
     spi_insterface_inst (
         .clk(clk), .rst(rst),
         .wdata(wdata2), .wr(wr2), .full(full2),
-        .rdata(rdata2), .rd(rd2), .empty(empty2),
+        .rdata(rdata2), .rd(rd2), .empty(empty2), .usedw(usedw2),
         .len(len), .work(work), .op(op), .busy(busy),
         .mosi(mosi), .miso(miso), .scsn(scsn), .sclk(sclk)
     );
